@@ -1,0 +1,115 @@
+#!/usr/bin/perl
+
+=pod
+
+=head1 SYNOPSIS
+
+wt - command line work log client
+
+=head1 USAGE
+
+    wt [-d DATE] HH:MM-HH:MM ISSUE COMMENT
+
+=cut
+
+## TODO
+# date
+# wt report, wt commit, wt start
+
+use strict;
+use warnings;
+no warnings qw/experimental/;
+use feature qw/say switch/;
+use Getopt::Long;
+use Pod::Usage;
+use JSON qw/encode_json/;
+
+my $jira_base_url = "https://jira.uhusystems.com/jira";
+my $url = "$jira_base_url/rest/tempo-timesheets/3/worklogs/";
+
+my $date_override;
+GetOptions(
+	"date=s" => \$date_override,
+) or pod2usage();
+
+pod2usage() unless @ARGV;
+
+my ($start_time, $end_time);
+
+for ($ARGV[0]) {
+	when ([qw/start s/])   {pod2usage(); } # TODO
+	when ([qw/commit ci/]) {pod2usage(); }
+	when ([qw/report r/])  {pod2usage(); }
+	when ([qw/add a/]) {
+		$ARGV[1] =~ /(\d*:?\d*:?\d*)-(\d*:?\d*:?\d*)/;
+		pod2usage() if (not defined $1 or not defined $2); # TODO - allowed once wt start is available
+		my ($s, $e) = ($1, $2);
+		@start_time->{qw/H M S/} = split ':', $s;
+		@end_time->{qw/H M S/}   = split ':', $e;
+	}
+}
+
+my %project;
+$ARGV[1] =~ /([\w_]+)-(\d+)/);
+pod2usage() if (not defined $1 or not defined $2);
+%project{qw/name number/} = ($1, $2);
+
+my $comment = $ARGV[2];
+
+my $time_spent = time_spent($start_time, $end_time);
+
+# TODO -d date
+my $date_started = format_date(undef, $start_time);
+
+my $ojject = {
+
+    issue => {
+        #remainingEstimateSeconds => number,
+        key => $project{name},
+        projectId => $project{number},
+    },
+    comment => $comment,
+    dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
+    timeSpentSeconds => $time_spent, #seconds
+};
+
+print encode_json($ojject);
+
+
+###############
+
+sub pad {
+	($_[0] < 10) ? '0'.$_[0] : $_[0];
+}
+
+sub format_date {
+	my ($date, $time) = @_;
+	my @lt = localtime(time);
+	if (not defined $date or ref $date ne "HASH") {
+		$date = {Y => $lt[5]+1900, M => $lt[4]+1, D => $lt[3]};
+	}
+	if (not defined $time or ref $time ne "HASH") {
+		$time = {H => $lt[2], M => $lt[1], D => $lt[0]};
+	}
+
+	my $res = (join "-", map { pad($date{$_}) } qw/Y M D/)
+			. 'T'
+			. (join ":", map { pad($time{$_}) } qw/H M S/)
+			. $lt[8] ? '+2000' : '+1000';
+	return $res;
+}
+
+sub time_spent {
+	my ($start, $end) = @_;
+	my @lt = localtime(time);
+	if (not defined $start or ref $start ne "HASH") {
+		$start = {H => $lt[2], M => $lt[1], D => $lt[0]};
+	}
+	if (not defined $end or ref $end ne "HASH") {
+		$end   = {H => $lt[2], M => $lt[1], D => $lt[0]};
+	}
+
+	my $e = $end->{H}   * 3600 + $end->{M}   * 60 + $end->{S};
+	my $s = $start->{H} * 3600 + $start->{M} * 60 + $start>{S};
+	return abs($e - $s);
+}
