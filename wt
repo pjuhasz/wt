@@ -10,7 +10,7 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt add [-d DATE] HH:MM-HH:MM ISSUE COMMENT
+    wt add [-d DATE] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
     wt commit
     wt start [ISSUE]
     wt report START END [ISSUE]
@@ -23,12 +23,35 @@ Available subcommands:
 
 =head2 ADD
 
-    wt add [-d DATE] HH:MM-HH:MM ISSUE COMMENT
+    wt add [-d DATE] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
 
 Adds an entry to the local list of wt entries.
 
+There are three mandatory arguments:
 
+    Interval: starting and ending time in HH:MM format, separated by a dash.
+        If minutes are omitted, HH:00 is assumed.
 
+        If the starting time is omitted altogether, 
+        the saved start mark is used instead, if available.
+        It is an error to omit the start if no start mark is available.
+
+        If the ending time is omitted altogether, the current time is assumed.
+        
+        The ending time is also saved for the start mark of the next
+        "wt add" command. Thus, the interval argument may consist of 
+        just a single dash in certain cases, meaning 
+        "from the end of the last entry till now".
+
+    Issue: project or issue identifier, in PROJECT-NUMER format.
+        A single dash means to use the current project, if one is available.
+
+    Comment: arbitrary text (can contain spaces etc. if quoted) to describe
+        the task/bugfix etc.
+
+By default, the date for the entry is the current date. This can be overridden
+by the -d switch, which requires a date string in YYYY-MM-DD format. 
+If the year or month is omitted, the current year or month is substituted.
 
 =head2 COMMIT
 
@@ -42,15 +65,38 @@ Successfully committed entries are deleted from the list.
 	wt start [ISSUE]
 
 Saves a timestamp with the current time. In effect, this command means
-"I'm starting work now". An optional project (issue) name can be specified.
+"I'm starting work now". An optional project (issue) name can be specified,
+it will be saved as the current project.
 
 =head2 REPORT
 
+    wt report START END [ISSUE]
+
+Queries worklog entries from JIRA. TODO.
+
 =head2 RM
+
+    wt rm INDEX|all
+
+Delete one local wt entry. The index number of the entry to be deleted is
+the same as reported by "wt" without arguments.
+
+Alternatively, if called as "wt rm all", all local entries are deleted.
 
 =head2 LIST
 
+    wt
+
+(wt command without arguments)
+List local wt entries.
+
+
 =head2 HELP
+
+    wt help [SUBCOMMAND]
+
+Prints available subcommands if called without arguments,
+or detailed help for a subcommand.
 
 =cut
 
@@ -231,6 +277,7 @@ sub add {
 		if ($project_str eq "-") {
 			# use saved current project
 			$project = $state->{current_project};
+			die "Error: no current project available\n" unless defined $project;
 		}
 		else {
 			$project = parse_project($project_str);
