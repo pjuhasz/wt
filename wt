@@ -22,70 +22,64 @@ no warnings qw/experimental/;
 use feature qw/say switch/;
 use Getopt::Long;
 use Pod::Usage;
-use JSON qw/encode_json/;
+use JSON qw/encode_json decode_json/;
 use HTTP::Request;
 use LWP::UserAgent;
 use Term::ReadKey;
+use File::Spec;
 use Data::Dumper;
-
-# TODO config
-my $jira_base_url = "https://jira.uhusystems.com/jira";
-my $url = "$jira_base_url/rest/tempo-timesheets/3/worklogs/";
-my $user_name = 'juhasz.peter';
 
 my $date_override;
 GetOptions(
 	"date=s" => \$date_override,
 ) or pod2usage();
 
-pod2usage() unless @ARGV;
+my $config_fn = File::Spec->catfile($ENV{HOME}, ".wt", "wt.conf");
+my $state_fn  = File::Spec->catfile($ENV{HOME}, ".wt", "wt.state");
+my $config = load_config($config_fn);
+my $state  = load_state($state_fn);
 
-my ($start_time, $end_time);
+my $action = shift @ARGV;
 
-for ($ARGV[0]) {
-	when ([qw/start s/])   {pod2usage(); } # TODO
-	when ([qw/commit ci/]) {pod2usage(); }
-	when ([qw/report r/])  {pod2usage(); }
-	when ([qw/add a/]) {
-		my ($s, $e) = $ARGV[1] =~ /(\d*:?\d*:?\d*)-(\d*:?\d*:?\d*)/;
-		pod2usage() if (not defined $s or not defined $e); # TODO - allowed once wt start is available
-		my %t;
-		@t{qw/H M S/} = split ':', $s;
-		$start_time   = {%t};
-		@t{qw/H M S/} = split ':', $e;
-		$end_time     = {%t};
+for ($action) {
+	when (undef)           { list_local(); }
+	when ([qw/start s/])   { set_mark();   }
+	when ([qw/commit ci/]) { commit();     }
+	when ([qw/report r/])  { query();      }
+	when ([qw/help h/])    { help();       }
+	when ([qw/add a/])     { add();        }
+	default                { help();       }
+}
 
-		my %project;
-		($project{name}, $project{number}) = $ARGV[2] =~ /([\w_]+)-(\d+)/;
-		die "Error: Invalid project name, must be in PROJECT-NUMBER format\n" if (not defined $project{name} or not defined $project{number});
 
-		my $comment = $ARGV[3];
-		die "Error: Comment is required\n" unless defined $comment;
+###############
 
-		my $time_spent = time_spent($start_time, $end_time);
+sub help {
+	say "help";
+}
 
-		# TODO -d date
-		my $date_started = format_date(undef, $start_time);
+sub list_local {
+	say "list local";
+}
 
-		my $pw = get_pw();
+sub set_mark{
+	say "set mark";
+	save_state($state_fn, $state); 
+}
 
-		my $ojject = {
+sub commit {
+	
+	my $pw = get_pw();
 
-			issue => {
-				#remainingEstimateSeconds => number,
-				key => $project{name},
-				projectId => $project{number},
-			},
-			comment => $comment,
-			dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
-			timeSpentSeconds => $time_spent, #seconds
-		};
+	my @lines = @{$state->{local}};
 
-		my $json = encode_json($ojject);
-								
+	for my $wtline (@lines) {
+		my $json = wtline_to_jira_json($wtline);
+		if (0) { # FIXME
+		my $url = $config->{jira_base_url}.$config->{worklog_url};
 		my $req = HTTP::Request->new('POST', $url);
 		$req->header('Content-Type' => 'application/json');
-		$req->authorization_basic($user_name, $pw);
+		$req->authorization_basic($config->{user_name}, $pw);
 		$req->content($json);
 		my $ua = LWP::UserAgent->new;
 		my $response = $ua->request($req);
@@ -96,10 +90,117 @@ for ($ARGV[0]) {
 		else {
 			say Dumper $response;
 		}
+		}
 
+		# delete locally stored wt line if commit was successful
+		shift @{$state->{local}};
+	}
+	
+	save_state($state_fn, $state);
+}
+
+sub query {
+	say "query";
+	save_state($state_fn, $state);
+}
+
+sub add {
+	my $interval = shift @ARGV;
+	my ($s, $e) = $interval =~ /(\d*:?\d*:?\d*)-(\d*:?\d*:?\d*)/;
+	pod2usage() if (not defined $s or not defined $e); # TODO - allowed once wt start is available
+	my %t;
+	@t{qw/H M S/} = split ':', $s;
+	my $start_time   = {%t};
+	@t{qw/H M S/} = split ':', $e;
+	my $end_time     = {%t};
+
+	my $project_str = shift @ARGV;
+	my %project;
+	($project{name}, $project{number}) = $project_str =~ /([\w_]+)-(\d+)/;
+	die "Error: Invalid project name, must be in PROJECT-NUMBER format\n" if (not defined $project{name} or not defined $project{number});
+
+	my $comment = shift @ARGV;
+	die "Error: Comment is required\n" unless defined $comment;
+
+	my $wtline = {
+		start_time => $start_time,
+		end_time   => $end_time,
+		date       => undef, # TODO
+		project    => { %project },
+		comment    => $comment,
+	};
+
+	push @{$state->{local}}, $wtline;
+	
+	$state->{current_project} = { %project };
+	$state->{start_mark} = $end_time;
+
+	save_state($state_fn, $state);
+}
+
+###############
+
+sub _load_json {
+	my ($fn) = @_;
+	open(my $FH, "<", $fn) or return undef;
+	my $json = join "", <$FH>;
+	close $FH;
+	return decode_json $json;
+}
+
+sub _save_json {
+	my ($fn, $obj, $what) = @_;
+	if (open(my $FH, ">", $fn)) {
+		print $FH encode_json $obj;
+		close $FH;
+	}
+	else {
+		warn "Error: can't write $what file $fn\n";
 	}
 }
 
+sub load_config {
+	my $config = _load_json($_[0]);
+	die "Can't load config file $_[0]\n" unless $config;
+	return $config;
+}
+
+sub load_state {
+	my $state = _load_json($_[0], "state");
+	return $state // { "local" => [], remote => [], start_mark => undef, current_project => undef };
+}
+
+sub save_state {
+	return _save_json($_[0], $_[1], "state");
+}
+
+###############
+
+sub wtline_to_jira_json {
+	my $wtline = shift;
+
+	my $time_spent = time_spent($wtline->{start_time}, $wtline->{end_time});
+
+	my $date_started = format_date($wtline->{date}, $wtline->{start_time});
+	
+	my $ojject = {
+		issue => {
+			#remainingEstimateSeconds => number,
+			key => $wtline->{project}{name},
+			projectId => $wtline->{project}{number},
+		},
+		comment => $wtline->{comment},
+		dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
+		timeSpentSeconds => $time_spent, #seconds
+	};
+
+	my $json = encode_json($ojject);
+	return $json;
+}
+
+sub jira_json_to_wtline {
+	
+}
 
 ###############
 
