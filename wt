@@ -13,8 +13,7 @@ wt - command line work log client
 =cut
 
 ## TODO
-# date
-# wt report, wt commit, wt start
+# help, query, detect overlaps -_-
 
 use strict;
 use warnings;
@@ -40,9 +39,10 @@ for ($action) {
 	when (undef)           { list_local(); }
 	when ([qw/start s/])   { set_mark();   }
 	when ([qw/commit ci/]) { commit();     }
-	when ([qw/report r/])  { query();      }
+	when ("report")        { query();      }
 	when ([qw/help h/])    { help();       }
 	when ([qw/add a/])     { add();        }
+	when ("rm")            { rm();         }
 	default                { help();       }
 }
 
@@ -56,7 +56,35 @@ sub help {
 }
 
 sub list_local {
-	say "TODO list local";
+	my $i = 1;
+	for my $wt (@{$state->{local}}) {
+		say join "\t",
+			$i++, 
+			(join "-", map { pad($wt->{date}->{$_}) } qw/Y M D/),
+			(join ":", map { pad($wt->{start_time}->{$_}) } qw/H M S/),
+			(join ":", map { pad($wt->{end_time}->{$_}) } qw/H M S/),
+			$wt->{project}{name}."-".$wt->{project}{number},
+			$wt->{comment};
+	}
+	say "No local wt records." unless scalar @{$state->{local}};
+}
+
+sub rm {
+	my $idx = shift @ARGV;
+	die "Error: specify the index of local wt record to be deleted" unless $idx;
+	die "Error: no local wt records to delete\n" unless scalar @{$state->{local}};
+	
+	if ($idx eq "all") {
+		$state->{local} = [];
+		say "All local wt records deleted!";
+	}
+	else {
+		die "Error: index must be 1..".scalar @{$state->{local}}."\n" unless $idx >= 1 and $idx <= scalar @{$state->{local}};
+		# at this point we should have a valid index to delete
+		splice @{$state->{local}}, $idx-1, 1;
+	}
+	save_state($state_fn, $state); 
+	list_local();
 }
 
 sub set_mark{
@@ -135,9 +163,23 @@ sub add {
 	# first argument: from-to time
 	my ($s, $e) = split '-', $interval;
 	
-	die "Error: no saved starting time available, you must specify it explicitly\n" if not defined $s and not defined $state->{start_mark};
-	$s //= $state->{start_mark};
-	my $start_time = parse_time($s);
+	#print Dumper $s, $e, $state;
+	
+	# If from is not specified, try to use saved start mark.
+	# If there is no start mark either, give up.
+	my $start_time;
+	if (not $s) {
+		if (defined $state->{start_mark}) {
+			$start_time = $state->{start_mark};
+		}
+		else {
+			die "Error: no saved starting time available, you must specify it explicitly\n";
+		}
+	}
+	else {
+		$start_time = parse_time($s);
+	}
+	# end time falls back to current time if not specified
 	my $end_time   = parse_time($e);
 
 	# second argument: project
@@ -165,6 +207,9 @@ sub add {
 	$state->{start_mark} = $end_time;
 
 	save_state($state_fn, $state);
+	list_local();
+	#print Dumper $state;
+
 }
 
 ###############
@@ -233,10 +278,6 @@ sub jira_json_to_wtline {
 
 ###############
 
-sub pad {
-	($_[0] < 10) ? '0'.$_[0] : $_[0];
-}
-
 # if date is defined, try to parse it from YYYY-MM-DD or MM-DD or DD string, otherwise get current date
 # if year or month is missing, it is substituted from current date
 sub parse_date {
@@ -245,7 +286,7 @@ sub parse_date {
 	my @lt = localtime(time);
 	my $date = {Y => $lt[5]+1900, M => $lt[4]+1, D => $lt[3]};
 	
-	if (defined $dstr) {
+	if (defined $dstr and $dstr) {
 		if ($dstr =~ /^\d\d?$/) {
 			$date->{D} = $dstr;
 		}
@@ -273,7 +314,7 @@ sub parse_time {
 	my @lt = localtime(time);
 	my $time = {H => $lt[2], M => $lt[1], S => $lt[0]};
 	
-	if (defined $dstr) {
+	if (defined $dstr and $dstr) {
 		if ($dstr =~ /^\d\d?$/) {
 			$time->{H} = $dstr;
 			$time->{M} = $time->{S} = 0;
@@ -302,6 +343,10 @@ sub parse_project {
 	($project->{name}, $project->{number}) = $project_str =~ /([\w_]+)-(\d+)/;
 	return undef unless defined $project->{name} and defined $project->{number};
 	return $project;
+}
+
+sub pad {
+	($_[0] < 10) ? '0'.$_[0] : $_[0];
 }
 
 sub format_date {
