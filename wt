@@ -20,19 +20,14 @@ use strict;
 use warnings;
 no warnings qw/experimental/;
 use feature qw/say switch/;
-use Getopt::Long;
-use Pod::Usage;
+#use Getopt::Long;
+#use Pod::Usage;
 use JSON qw/encode_json decode_json/;
 use HTTP::Request;
 use LWP::UserAgent;
 use Term::ReadKey;
 use File::Spec;
 use Data::Dumper;
-
-my $date_override;
-GetOptions(
-	"date=s" => \$date_override,
-) or pod2usage();
 
 my $config_fn = File::Spec->catfile($ENV{HOME}, ".wt", "wt.conf");
 my $state_fn  = File::Spec->catfile($ENV{HOME}, ".wt", "wt.state");
@@ -56,6 +51,7 @@ for ($action) {
 
 sub help {
 	say "help";
+	exit;
 }
 
 sub list_local {
@@ -64,6 +60,9 @@ sub list_local {
 
 sub set_mark{
 	say "set mark";
+	
+	$state->{start_mark} = parse_time(undef);
+	
 	save_state($state_fn, $state); 
 }
 
@@ -106,13 +105,21 @@ sub query {
 
 sub add {
 	my $interval = shift @ARGV;
-	my ($s, $e) = $interval =~ /(\d*:?\d*:?\d*)-(\d*:?\d*:?\d*)/;
-	pod2usage() if (not defined $s or not defined $e); # TODO - allowed once wt start is available
-	my %t;
-	@t{qw/H M S/} = split ':', $s;
-	my $start_time   = {%t};
-	@t{qw/H M S/} = split ':', $e;
-	my $end_time     = {%t};
+	
+	my $date = parse_date(undef); # get current date
+	if ($interval eq "-d") {
+		my $date_override = shift @ARGV;
+		$date = parse_date($date_override);
+		help("add") unless $date;
+		$interval = shift @ARGV;
+	}
+	
+	my ($s, $e) = split '-', $interval;
+	
+	die "Error: no saved starting time available, you must specify it explicitly\n" if not defined $s and not defined $state->{start_mark};
+	$s //= $state->{start_mark};
+	my $start_time = parse_time($s);
+	my $end_time   = parse_time($e);
 
 	my $project_str = shift @ARGV;
 	my %project;
@@ -208,16 +215,68 @@ sub pad {
 	($_[0] < 10) ? '0'.$_[0] : $_[0];
 }
 
+# if date is defined, try to parse it from YYYY-MM-DD or MM-DD or DD string, otherwise get current date
+# if year or month is missing, it is substituted from current date
+sub parse_date {
+	my $dstr = shift;
+
+	my @lt = localtime(time);
+	my $date = {Y => $lt[5]+1900, M => $lt[4]+1, D => $lt[3]};
+	
+	if (defined $dstr) {
+		if ($dstr =~ /^\d\d?$/) {
+			$date->{D} = $dstr;
+		}
+		elsif ($dstr =~ /^(\d\d?)-(\d\d?)$/) {
+			$date->{M} = $1;
+			$date->{D} = $2;
+		}
+		elsif ($dstr =~ /^(\d{4})-(\d\d?)-(\d\d?)$/) {
+			$date->{Y} = $1;
+			$date->{M} = $2;
+			$date->{D} = $3;
+		}
+		else {
+			$date = undef;
+		}
+	}
+	return $date;
+}
+
+# if time is defined, try to parse it from HH-MM-SS or HH-MM or HH string, otherwise get current time
+# if minutes or seconds are missing, they are assumed to be zero (whole hour/minute)
+sub parse_time {
+	my $dstr = shift;
+	
+	my @lt = localtime(time);
+	my $time = {H => $lt[2], M => $lt[1], S => $lt[0]};
+	
+	if (defined $dstr) {
+		if ($dstr =~ /^\d\d?$/) {
+			$time->{H} = $dstr;
+			$time->{M} = $time->{S} = 0;
+		}
+		elsif ($dstr =~ /^(\d\d?):(\d\d?)$/) {
+			$time->{H} = $1;
+			$time->{M} = $2;
+			$time->{S} = 0;
+		}
+		elsif ($dstr =~ /^(\d\d?):(\d\d?):(\d\d?)$/) {
+			$time->{H} = $1;
+			$time->{M} = $2;
+			$time->{S} = $3;
+		}
+		else {
+			$time = undef;
+		}
+	}
+	return $time;
+}
+
 sub format_date {
 	my ($date, $time) = @_;
-	my @lt = localtime(time);
-	if (not defined $date or ref $date ne "HASH") {
-		$date = {Y => $lt[5]+1900, M => $lt[4]+1, D => $lt[3]};
-	}
-	if (not defined $time or ref $time ne "HASH") {
-		$time = {H => $lt[2], M => $lt[1], S => $lt[0]};
-	}
 
+	my @lt = localtime(time);
 	my $res = (join "-", map { pad($date->{$_}) } qw/Y M D/)
 			. 'T'
 			. (join ":", map { pad($time->{$_}) } qw/H M S/)
@@ -227,13 +286,6 @@ sub format_date {
 
 sub time_spent {
 	my ($start, $end) = @_;
-	my @lt = localtime(time);
-	if (not defined $start or ref $start ne "HASH") {
-		$start = {H => $lt[2], M => $lt[1], D => $lt[0]};
-	}
-	if (not defined $end or ref $end ne "HASH") {
-		$end   = {H => $lt[2], M => $lt[1], D => $lt[0]};
-	}
 
 	$end->{M}   //= 0;
 	$end->{S}   //= 0;
