@@ -23,9 +23,15 @@ use feature qw/say switch/;
 use Getopt::Long;
 use Pod::Usage;
 use JSON qw/encode_json/;
+use HTTP::Request;
+use LWP::UserAgent;
+use Term::ReadKey;
+use Data::Dumper;
 
+# TODO config
 my $jira_base_url = "https://jira.uhusystems.com/jira";
 my $url = "$jira_base_url/rest/tempo-timesheets/3/worklogs/";
+my $user_name = 'juhasz.peter';
 
 my $date_override;
 GetOptions(
@@ -41,39 +47,58 @@ for ($ARGV[0]) {
 	when ([qw/commit ci/]) {pod2usage(); }
 	when ([qw/report r/])  {pod2usage(); }
 	when ([qw/add a/]) {
-		$ARGV[1] =~ /(\d*:?\d*:?\d*)-(\d*:?\d*:?\d*)/;
-		pod2usage() if (not defined $1 or not defined $2); # TODO - allowed once wt start is available
-		my ($s, $e) = ($1, $2);
-		@start_time->{qw/H M S/} = split ':', $s;
-		@end_time->{qw/H M S/}   = split ':', $e;
+		my ($s, $e) = $ARGV[1] =~ /(\d*:?\d*:?\d*)-(\d*:?\d*:?\d*)/;
+		pod2usage() if (not defined $s or not defined $e); # TODO - allowed once wt start is available
+		my %t;
+		@t{qw/H M S/} = split ':', $s;
+		$start_time   = {%t};
+		@t{qw/H M S/} = split ':', $e;
+		$end_time     = {%t};
+
+		my %project;
+		($project{name}, $project{number}) = $ARGV[2] =~ /([\w_]+)-(\d+)/;
+		die "Error: Invalid project name, must be in PROJECT-NUMBER format\n" if (not defined $project{name} or not defined $project{number});
+
+		my $comment = $ARGV[3];
+		die "Error: Comment is required\n" unless defined $comment;
+
+		my $time_spent = time_spent($start_time, $end_time);
+
+		# TODO -d date
+		my $date_started = format_date(undef, $start_time);
+
+		my $pw = get_pw();
+
+		my $ojject = {
+
+			issue => {
+				#remainingEstimateSeconds => number,
+				key => $project{name},
+				projectId => $project{number},
+			},
+			comment => $comment,
+			dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
+			timeSpentSeconds => $time_spent, #seconds
+		};
+
+		my $json = encode_json($ojject);
+								
+		my $req = HTTP::Request->new('POST', $url);
+		$req->header('Content-Type' => 'application/json');
+		$req->authorization_basic($user_name, $pw);
+		$req->content($json);
+		my $ua = LWP::UserAgent->new;
+		my $response = $ua->request($req);
+		
+		if ( $response->is_success() ) {
+			say "POST OK";
+		}
+		else {
+			say Dumper $response;
+		}
+
 	}
 }
-
-my %project;
-$ARGV[1] =~ /([\w_]+)-(\d+)/);
-pod2usage() if (not defined $1 or not defined $2);
-%project{qw/name number/} = ($1, $2);
-
-my $comment = $ARGV[2];
-
-my $time_spent = time_spent($start_time, $end_time);
-
-# TODO -d date
-my $date_started = format_date(undef, $start_time);
-
-my $ojject = {
-
-    issue => {
-        #remainingEstimateSeconds => number,
-        key => $project{name},
-        projectId => $project{number},
-    },
-    comment => $comment,
-    dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
-    timeSpentSeconds => $time_spent, #seconds
-};
-
-print encode_json($ojject);
 
 
 ###############
@@ -89,13 +114,13 @@ sub format_date {
 		$date = {Y => $lt[5]+1900, M => $lt[4]+1, D => $lt[3]};
 	}
 	if (not defined $time or ref $time ne "HASH") {
-		$time = {H => $lt[2], M => $lt[1], D => $lt[0]};
+		$time = {H => $lt[2], M => $lt[1], S => $lt[0]};
 	}
 
-	my $res = (join "-", map { pad($date{$_}) } qw/Y M D/)
+	my $res = (join "-", map { pad($date->{$_}) } qw/Y M D/)
 			. 'T'
-			. (join ":", map { pad($time{$_}) } qw/H M S/)
-			. $lt[8] ? '+2000' : '+1000';
+			. (join ":", map { pad($time->{$_}) } qw/H M S/)
+			. ($lt[8] ? '+2000' : '+1000');
 	return $res;
 }
 
@@ -109,7 +134,21 @@ sub time_spent {
 		$end   = {H => $lt[2], M => $lt[1], D => $lt[0]};
 	}
 
+	$end->{M}   //= 0;
+	$end->{S}   //= 0;
+	$start->{M} //= 0;
+	$start->{S} //= 0;
+
 	my $e = $end->{H}   * 3600 + $end->{M}   * 60 + $end->{S};
-	my $s = $start->{H} * 3600 + $start->{M} * 60 + $start>{S};
+	my $s = $start->{H} * 3600 + $start->{M} * 60 + $start->{S};
 	return abs($e - $s);
+}
+
+sub get_pw {
+	ReadMode 2;
+	print "JIRA Password:";
+	my $pw = <STDIN>;
+	print "\n";
+	ReadMode 0;
+	return $pw;
 }
