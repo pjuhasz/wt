@@ -50,18 +50,30 @@ for ($action) {
 ###############
 
 sub help {
-	say "help";
+	my $action = shift // "";
+	say "TODO help $action";
 	exit;
 }
 
 sub list_local {
-	say "list local";
+	say "TODO list local";
 }
 
 sub set_mark{
-	say "set mark";
-	
 	$state->{start_mark} = parse_time(undef);
+	
+	my $project_str = shift @ARGV;
+	if (defined $project_str) {
+		my $project = parse_project($project_str);
+		if (defined $project) {
+			$state->{current_project} = $project;
+		}
+		else {
+			$project_str //= "";
+			warn "Warn: invalid project name '$project_str', must be in PROJECT-NUMBER format\n";
+		}
+		
+	}
 	
 	save_state($state_fn, $state); 
 }
@@ -74,6 +86,7 @@ sub commit {
 
 	for my $wtline (@lines) {
 		my $json = wtline_to_jira_json($wtline);
+		say "FIXME $json";
 		if (0) { # FIXME
 		my $url = $config->{jira_base_url}.$config->{worklog_url};
 		my $req = HTTP::Request->new('POST', $url);
@@ -99,21 +112,27 @@ sub commit {
 }
 
 sub query {
-	say "query";
+	say "TODO query";
 	save_state($state_fn, $state);
 }
 
 sub add {
 	my $interval = shift @ARGV;
 	
+	help("add") unless defined $interval;
+	
+	# optional first argument: date
 	my $date = parse_date(undef); # get current date
 	if ($interval eq "-d") {
 		my $date_override = shift @ARGV;
+		die "Error: you must specify a date with -d\n" unless defined $date_override;
 		$date = parse_date($date_override);
 		help("add") unless $date;
 		$interval = shift @ARGV;
+		help("add") unless defined $interval;
 	}
-	
+
+	# first argument: from-to time
 	my ($s, $e) = split '-', $interval;
 	
 	die "Error: no saved starting time available, you must specify it explicitly\n" if not defined $s and not defined $state->{start_mark};
@@ -121,25 +140,28 @@ sub add {
 	my $start_time = parse_time($s);
 	my $end_time   = parse_time($e);
 
+	# second argument: project
 	my $project_str = shift @ARGV;
-	my %project;
-	($project{name}, $project{number}) = $project_str =~ /([\w_]+)-(\d+)/;
-	die "Error: Invalid project name, must be in PROJECT-NUMBER format\n" if (not defined $project{name} or not defined $project{number});
+	my $project = parse_project($project_str);
+	$project_str //= "";
+	die "Error: Invalid project name '$project_str', must be in PROJECT-NUMBER format\n" if not defined $project;
 
+	# third argument: comment
 	my $comment = shift @ARGV;
 	die "Error: Comment is required\n" unless defined $comment;
 
+	# assemble ojject and save it
 	my $wtline = {
 		start_time => $start_time,
 		end_time   => $end_time,
-		date       => undef, # TODO
-		project    => { %project },
+		date       => $date,
+		project    => $project,
 		comment    => $comment,
 	};
 
 	push @{$state->{local}}, $wtline;
 	
-	$state->{current_project} = { %project };
+	$state->{current_project} = $project;
 	$state->{start_mark} = $end_time;
 
 	save_state($state_fn, $state);
@@ -271,6 +293,15 @@ sub parse_time {
 		}
 	}
 	return $time;
+}
+
+# parse JIRA style PROJECT-NUM identifiers
+sub parse_project {
+	my $project_str = shift // "";
+	my $project;
+	($project->{name}, $project->{number}) = $project_str =~ /([\w_]+)-(\d+)/;
+	return undef unless defined $project->{name} and defined $project->{number};
+	return $project;
 }
 
 sub format_date {
