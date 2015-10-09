@@ -8,7 +8,49 @@ wt - command line work log client
 
 =head1 USAGE
 
-    wt [-d DATE] HH:MM-HH:MM ISSUE COMMENT
+Available subcommands:
+
+    wt add [-d DATE] HH:MM-HH:MM ISSUE COMMENT
+    wt commit
+    wt start [ISSUE]
+    wt report START END [ISSUE]
+    wt rm INDEX|all
+    wt
+    wt help [SUBCOMMAND]
+
+
+=head1 SUBCOMMANDS
+
+=head2 ADD
+
+    wt add [-d DATE] HH:MM-HH:MM ISSUE COMMENT
+
+Adds an entry to the local list of wt entries.
+
+
+
+
+=head2 COMMIT
+
+    wt commit
+
+Attempt to commit local wt entries to JIRA.
+Successfully committed entries are deleted from the list.
+
+=head2 START
+
+	wt start [ISSUE]
+
+Saves a timestamp with the current time. In effect, this command means
+"I'm starting work now". An optional project (issue) name can be specified.
+
+=head2 REPORT
+
+=head2 RM
+
+=head2 LIST
+
+=head2 HELP
 
 =cut
 
@@ -20,7 +62,7 @@ use warnings;
 no warnings qw/experimental/;
 use feature qw/say switch/;
 #use Getopt::Long;
-#use Pod::Usage;
+use Pod::Usage;
 use JSON qw/encode_json decode_json/;
 use HTTP::Request;
 use LWP::UserAgent;
@@ -180,13 +222,26 @@ sub add {
 		$start_time = parse_time($s);
 	}
 	# end time falls back to current time if not specified
-	my $end_time   = parse_time($e);
+	my $end_time = parse_time($e);
 
 	# second argument: project
 	my $project_str = shift @ARGV;
-	my $project = parse_project($project_str);
-	$project_str //= "";
-	die "Error: Invalid project name '$project_str', must be in PROJECT-NUMBER format\n" if not defined $project;
+	my $project;
+	if (defined $project_str) {
+		if ($project_str eq "-") {
+			# use saved current project
+			$project = $state->{current_project};
+		}
+		else {
+			$project = parse_project($project_str);
+			$project_str //= "";
+			die "Error: Invalid project name '$project_str', must be in PROJECT-NUMBER format\n" unless defined $project;
+		}
+	}
+	else {
+		die "Error: project name is mandatory\n";
+
+	}
 
 	# third argument: comment
 	my $comment = shift @ARGV;
