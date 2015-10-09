@@ -107,7 +107,6 @@ use strict;
 use warnings;
 no warnings qw/experimental/;
 use feature qw/say switch/;
-#use Getopt::Long;
 use Pod::Usage;
 use JSON qw/encode_json decode_json/;
 use HTTP::Request;
@@ -138,8 +137,19 @@ for ($action) {
 ###############
 
 sub help {
-	my $action = shift // "";
-	say "TODO help $action";
+	my $action = shift // shift @ARGV // "";
+
+	for ($action) {
+		when (undef)           { pod2usage({-verbose => 99, -sections => "SYNOPSIS|USAGE"});     }
+		when ([qw/start s/])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/START"});  }
+		when ([qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"}); }
+		when ("report")        { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}); }
+		when ([qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
+		when ([qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
+		when ("rm")            { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/RM"});     }
+		default                { pod2usage({-verbose => 99, -sections => "SYNOPSIS|USAGE"});     }
+	}
+
 	exit;
 }
 
