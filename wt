@@ -160,7 +160,7 @@ sub help {
 sub list_local {
 	my $i = 1;
 	for my $wt (@{$state->{local}}) {
-		say join "\t", $i++, print_wtline($wt);
+		print print_wtline($wt, $i++);
 	}
 	say "No local wt records." unless scalar @{$state->{local}};
 }
@@ -315,8 +315,8 @@ sub add {
 
 	if (my $overlap_idx = check_overlap($wtline)) {
 		die "Error: input overlaps with existing entry:\n" .
-			$overlap_idx . "\t" . print_wtline($state->{local}[$overlap_idx-1]) . "\n" .
-			"X\t" . print_wtline($wtline) . "\n";
+			 print_wtline($state->{local}[$overlap_idx-1], $overlap_idx) .
+			 print_wtline($wtline, undef);
 	}
 
 	push @{$state->{local}}, $wtline;
@@ -396,13 +396,15 @@ sub jira_json_to_wtline {
 
 sub print_wtline {
 	my $wt = shift;
+	my $idx = shift // 'X';
 	
 	return join "\t",
+		$idx,
 		(join "-", map { pad($wt->{date}->{$_}) } qw/Y M D/),
 		(join ":", map { pad($wt->{start_time}->{$_}) } qw/H M S/),
 		(join ":", map { pad($wt->{end_time}->{$_}) } qw/H M S/),
 		$wt->{project}{name}."-".$wt->{project}{number},
-		$wt->{comment};
+		$wt->{comment}."\n";
 }
 
 ###############
