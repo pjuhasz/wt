@@ -13,7 +13,7 @@ Available subcommands:
     wt add [-d DATE] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
     wt commit
     wt start [ISSUE]
-    wt report START END [ISSUE]
+    wt report [START] [END] [ISSUE]
     wt rm INDEX|all
     wt
     wt help [SUBCOMMAND]
@@ -70,11 +70,18 @@ it will be saved as the current project.
 
 =head2 REPORT
 
-    wt report [START] [END] [ISSUE]
+    wt report [START] [END] [PROJECT]
 
-Queries worklog entries from JIRA. TODO.
+Queries worklog entries from JIRA.
+If this subcommand is called with two date arguments, worklog entries between the two date
+are queried from JIRA. Dates must be specified as YYYY-MM-DD.
+If the year or month is omitted, the current year or month is substituted.
 
-If called without entries, prints the results of the last query
+The end date may be omitted altogether, in which case the current date is assumed.
+
+An optional third argument can be used to filter for project name.
+
+If called without dates, prints the results of the last query
 (but doesn't start a new query).
 
 =head2 RM
@@ -118,6 +125,7 @@ use Term::ReadKey;
 use File::Spec;
 use Time::Local;
 use Data::Dumper;
+use URI::Escape;
 
 my $config_fn = File::Spec->catfile($ENV{HOME}, ".wt", "wt.conf");
 my $state_fn  = File::Spec->catfile($ENV{HOME}, ".wt", "wt.state");
@@ -211,7 +219,6 @@ sub commit {
 	for my $wtline (@lines) {
 		my $json = wtline_to_jira_json($wtline);
 		say "FIXME $json";
-		if (0) { # FIXME
 		my $url = $config->{jira_base_url}.$config->{worklog_url};
 		my $req = HTTP::Request->new('POST', $url);
 		$req->header('Content-Type' => 'application/json');
@@ -222,22 +229,66 @@ sub commit {
 		
 		if ( $response->is_success() ) {
 			say "POST OK";
+			# delete locally stored wt line if commit was successful
+			shift @{$state->{local}};
 		}
 		else {
 			say Dumper $response;
 		}
-		}
 
-		# delete locally stored wt line if commit was successful
-		shift @{$state->{local}};
+		
 	}
 	
 	save_state($state_fn, $state);
 }
 
 sub query {
-	say "TODO query";
-	save_state($state_fn, $state);
+	my $start_date_str = shift @ARGV;
+	
+	if (defined $start_date_str) {
+		my $start_date = parse_date($start_date_str);
+		pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}) unless defined $start_date;
+		 
+		my $end_date_str = shift @ARGV;
+		my $end_date = parse_date($end_date_str);
+		
+		my $project = shift @ARGV;
+		
+		
+		
+		my $pw = get_pw();
+		
+		my $url = $config->{jira_base_url}.$config->{worklog_url};
+		
+		my %query_hash = (dateFrom => _print_date($start_date), dateTo => _print_date($end_date), username => $config->{user_name});
+		$query_hash{projectKey} = $project if defined $project;
+		my $query_string = uri_escape_hash(%query_hash);
+		
+		my $req = HTTP::Request->new('GET', $url."?".$query_string);
+		$req->authorization_basic($config->{user_name}, $pw);
+
+		my $ua = LWP::UserAgent->new;
+		my $response = $ua->request($req);
+		
+		if ( $response->is_success() ) {
+			say "GET OK";
+			say Dumper $response;
+		}
+		else {
+			say Dumper $response;
+		}
+		
+		save_state($state_fn, $state);
+	}
+	else {
+		# print last saved query, don't actually ask jira
+		my $i = 1;
+		for my $wt (@{$state->{remote}}) {
+			print print_wtline($wt, $i++);
+		}
+		say "There is no saved query." unless scalar @{$state->{remote}};
+	} 
+	
 }
 
 sub add {
@@ -399,14 +450,31 @@ sub print_wtline {
 	
 	return join "\t",
 		$idx,
-		(join "-", map { pad($wt->{date}->{$_}) } qw/Y M D/),
-		(join ":", map { pad($wt->{start_time}->{$_}) } qw/H M S/),
-		(join ":", map { pad($wt->{end_time}->{$_}) } qw/H M S/),
+		_print_date($wt->{date}),
+		_print_time($wt->{start_time}),
+		_print_time($wt->{end_time}),
 		$wt->{project},
 		$wt->{comment}."\n";
 }
 
+sub uri_escape_hash {
+    my %hash = @_;
+    my @pairs;
+    for my $key (keys %hash) {
+        push @pairs, join "=", map { uri_escape($_) } $key, $hash{$key};
+    }
+    return join "&", @pairs;
+}
+
 ###############
+
+sub _print_date {
+	join "-", map { pad($_[0]->{$_}) } qw/Y M D/;
+}
+
+sub _print_time {
+	join ":", map { pad($_[0]->{$_}) } qw/H M S/;
+}
 
 sub _wt2tfe {
 	my ($t, $d) = @_;
@@ -445,16 +513,16 @@ sub parse_date {
 	
 	if (defined $dstr and $dstr) {
 		if ($dstr =~ /^\d\d?$/) {
-			$date->{D} = $dstr;
+			$date->{D} = 0+$dstr;
 		}
 		elsif ($dstr =~ /^(\d\d?)-(\d\d?)$/) {
-			$date->{M} = $1;
-			$date->{D} = $2;
+			$date->{M} = 0+$1;
+			$date->{D} = 0+$2;
 		}
 		elsif ($dstr =~ /^(\d{4})-(\d\d?)-(\d\d?)$/) {
-			$date->{Y} = $1;
-			$date->{M} = $2;
-			$date->{D} = $3;
+			$date->{Y} = 0+$1;
+			$date->{M} = 0+$2;
+			$date->{D} = 0+$3;
 		}
 		else {
 			$date = undef;
@@ -473,18 +541,18 @@ sub parse_time {
 	
 	if (defined $dstr and $dstr) {
 		if ($dstr =~ /^\d\d?$/) {
-			$time->{H} = $dstr;
+			$time->{H} = 0+$dstr;
 			$time->{M} = $time->{S} = 0;
 		}
 		elsif ($dstr =~ /^(\d\d?):(\d\d?)$/) {
-			$time->{H} = $1;
-			$time->{M} = $2;
+			$time->{H} = 0+$1;
+			$time->{M} = 0+$2;
 			$time->{S} = 0;
 		}
 		elsif ($dstr =~ /^(\d\d?):(\d\d?):(\d\d?)$/) {
-			$time->{H} = $1;
-			$time->{M} = $2;
-			$time->{S} = $3;
+			$time->{H} = 0+$1;
+			$time->{M} = 0+$2;
+			$time->{S} = 0+$3;
 		}
 		else {
 			$time = undef;
@@ -501,9 +569,9 @@ sub format_date {
 	my ($date, $time) = @_;
 
 	my @lt = localtime(time);
-	my $res = (join "-", map { pad($date->{$_}) } qw/Y M D/)
+	my $res = _print_date($date)
 			. 'T'
-			. (join ":", map { pad($time->{$_}) } qw/H M S/)
+			. _print_time($time)
 			. ($lt[8] ? '+2000' : '+1000');
 	return $res;
 }
