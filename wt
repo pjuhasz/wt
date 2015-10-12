@@ -104,7 +104,7 @@ or detailed help for a subcommand.
 =cut
 
 ## TODO
-# commit, query, detect overlaps -_-
+# commit, query
 
 use strict;
 use warnings;
@@ -290,7 +290,7 @@ sub add {
 			die "Error: no current project available\n" unless defined $project;
 		}
 		else {
-			$project = parse_project($project_str);
+			$project = $project_str;
 			$project_str //= "";
 			die "Error: Invalid project name '$project_str', must be in PROJECT-NUMBER format\n" unless defined $project;
 		}
@@ -378,8 +378,7 @@ sub wtline_to_jira_json {
 	my $ojject = {
 		issue => {
 			#remainingEstimateSeconds => number,
-			key => $wtline->{project}{name},
-			projectId => $wtline->{project}{number},
+			key => $wtline->{project},
 		},
 		comment => $wtline->{comment},
 		dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
@@ -403,7 +402,7 @@ sub print_wtline {
 		(join "-", map { pad($wt->{date}->{$_}) } qw/Y M D/),
 		(join ":", map { pad($wt->{start_time}->{$_}) } qw/H M S/),
 		(join ":", map { pad($wt->{end_time}->{$_}) } qw/H M S/),
-		$wt->{project}{name}."-".$wt->{project}{number},
+		$wt->{project},
 		$wt->{comment}."\n";
 }
 
@@ -492,15 +491,6 @@ sub parse_time {
 		}
 	}
 	return $time;
-}
-
-# parse JIRA style PROJECT-NUM identifiers
-sub parse_project {
-	my $project_str = shift // "";
-	my $project;
-	($project->{name}, $project->{number}) = $project_str =~ /([\w_]+)-(\d+)/;
-	return undef unless defined $project->{name} and defined $project->{number};
-	return $project;
 }
 
 sub pad {
