@@ -278,6 +278,8 @@ sub add {
 	# end time falls back to current time if not specified
 	my $end_time = parse_time($e);
 
+	die "Error: ending time must be later than starting time\n" if time_spent($start_time, $end_time, noabs => 1) <= 0;
+
 	# second argument: project
 	my $project_str = shift @ARGV;
 	my $project;
@@ -312,7 +314,9 @@ sub add {
 	};
 
 	if (my $overlap_idx = check_overlap($wtline)) {
-		die "Error: input overlaps with existing entry $overlap_idx:\n". print_wtline($state->{local}[$overlap_idx-1]) . "\n";
+		die "Error: input overlaps with existing entry:\n" .
+			$overlap_idx . "\t" . print_wtline($state->{local}[$overlap_idx-1]) . "\n" .
+			"X\t" . print_wtline($wtline) . "\n";
 	}
 
 	push @{$state->{local}}, $wtline;
@@ -423,9 +427,7 @@ sub check_overlap {
 		my $wt_start = _wt2tfe($wt->{start_time}, $wt->{date});
 		my $wt_end   = _wt2tfe($wt->{end_time},   $wt->{date});
 		
-		print join "\t", $new_start, $new_end, $wt_start, $wt_end, $new_start - $wt_end, $new_end - $wt_start; say'';
-		
-		return $i if ($new_start < $wt_end or $new_end > $wt_start);
+		return $i unless (($new_start <= $wt_end and $new_end <= $wt_start) or ($new_start >= $wt_end and $new_end >= $wt_start));
 		$i++;
 	}
 	
@@ -515,7 +517,7 @@ sub format_date {
 }
 
 sub time_spent {
-	my ($start, $end) = @_;
+	my ($start, $end, %args) = @_;
 
 	$end->{M}   //= 0;
 	$end->{S}   //= 0;
@@ -524,7 +526,13 @@ sub time_spent {
 
 	my $e = $end->{H}   * 3600 + $end->{M}   * 60 + $end->{S};
 	my $s = $start->{H} * 3600 + $start->{M} * 60 + $start->{S};
-	return abs($e - $s);
+	
+	if (exists $args{noabs}) {
+		return $e - $s;
+	}
+	else {
+		return abs($e - $s);
+	}
 }
 
 sub get_pw {
