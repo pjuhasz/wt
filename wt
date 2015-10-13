@@ -10,7 +10,7 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt add [-d DATE] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
+    wt add [-d DATE] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT [ACTIVITY]
     wt commit
     wt start [ISSUE]
     wt report [START] [END] [ISSUE]
@@ -23,7 +23,7 @@ Available subcommands:
 
 =head2 ADD
 
-    wt add [-d DATE] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
+    wt add [-d DATE] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT [ACTIVITY]
 
 Adds an entry to the local list of wt entries.
 
@@ -48,6 +48,9 @@ There are three mandatory arguments:
 
     Comment: arbitrary text (can contain spaces etc. if quoted) to describe
         the task/bugfix etc.
+
+The fourth, optional argument specifies the activity type. 
+If omitted, it is set to "Dev".
 
 By default, the date for the entry is the current date. This can be overridden
 by the -d switch, which requires a date string in YYYY-MM-DD format. 
@@ -218,24 +221,23 @@ sub commit {
 
 	for my $wtline (@lines) {
 		my $json = wtline_to_jira_json($wtline);
-		say "FIXME $json";
-		my $url = $config->{jira_base_url}.$config->{worklog_url};
-		my $req = HTTP::Request->new('POST', $url);
+		my $worklog_url = $config->{jira_base_url}.$config->{worklog_url};
+		my $req = HTTP::Request->new('POST', $worklog_url);
 		$req->header('Content-Type' => 'application/json');
 		$req->authorization_basic($config->{user_name}, $pw);
 		$req->content($json);
+
 		my $ua = LWP::UserAgent->new;
 		my $response = $ua->request($req);
 		
 		if ( $response->is_success() ) {
-			say "POST OK";
 			# delete locally stored wt line if commit was successful
 			shift @{$state->{local}};
 		}
 		else {
+			warn "JIRA responded with ".$response->status_line."\n";
 			say Dumper $response;
 		}
-
 		
 	}
 	
@@ -271,20 +273,24 @@ sub query {
 		my $response = $ua->request($req);
 		
 		if ( $response->is_success() ) {
-			say "GET OK";
-			say Dumper $response;
+			$state->{remote} = decode_json $response->decoded_content;
+			my $i = 1;
+			for my $csira (@{$state->{remote}}) {
+				print print_wtline(jira_json_to_wtline($csira), $i++);
+			}
+			save_state($state_fn, $state);
+
 		}
 		else {
-			say Dumper $response;
+			die "JIRA responded with ".$response->status_line."\n";
 		}
 		
-		save_state($state_fn, $state);
 	}
 	else {
 		# print last saved query, don't actually ask jira
 		my $i = 1;
-		for my $wt (@{$state->{remote}}) {
-			print print_wtline($wt, $i++);
+		for my $csira (@{$state->{remote}}) {
+			print print_wtline(jira_json_to_wtline($csira), $i++);
 		}
 		say "There is no saved query." unless scalar @{$state->{remote}};
 	} 
@@ -341,7 +347,7 @@ sub add {
 			die "Error: no current project available\n" unless defined $project;
 		}
 		else {
-			$project = $project_str;
+			$project = uc $project_str;
 			$project_str //= "";
 			die "Error: Invalid project name '$project_str', must be in PROJECT-NUMBER format\n" unless defined $project;
 		}
@@ -355,6 +361,9 @@ sub add {
 	my $comment = shift @ARGV;
 	die "Error: Comment is required\n" unless defined $comment;
 
+	# fourth argument: activity type
+	my $activity = shift @ARGV // 'Dev';
+
 	# assemble ojject and save it
 	my $wtline = {
 		start_time => $start_time,
@@ -362,6 +371,7 @@ sub add {
 		date       => $date,
 		project    => $project,
 		comment    => $comment,
+		activity   => $activity,
 	};
 
 	if (my $overlap_idx = check_overlap($wtline)) {
@@ -424,7 +434,7 @@ sub wtline_to_jira_json {
 
 	my $time_spent = time_spent($wtline->{start_time}, $wtline->{end_time});
 
-	my $date_started = format_date($wtline->{date}, $wtline->{start_time});
+	my $date_started = format_date($wtline->{date}, $wtline->{start_time}); # {H=>0, M=>0, S=>0}
 	
 	my $ojject = {
 		issue => {
@@ -434,6 +444,16 @@ sub wtline_to_jira_json {
 		comment => $wtline->{comment},
 		dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
 		timeSpentSeconds => $time_spent, #seconds
+		#projectId => 10400, # FIXME
+		worklogAttributes => [
+			 {
+			   'value' => $wtline->{activity},
+			   'key' => '_Activity_'
+			 }
+        ],
+		author => { 
+			name => $config->{user_name} 
+		},
 	};
 
 	my $json = encode_json($ojject);
@@ -441,7 +461,21 @@ sub wtline_to_jira_json {
 }
 
 sub jira_json_to_wtline {
+	my $jira = shift;
 	
+	my ($ds, $ts) = split 'T', $jira->{dateStarted};
+	my $date = parse_date($ds);
+	my $start_time = parse_time($ts);
+	my $end_time = increment_time($start_time, $jira->{timeSpentSeconds});
+	
+	return {
+		start_time => $start_time,
+		end_time   => $end_time,
+		date       => $date,
+		project    => $jira->{issue}{key},
+		comment    => $jira->{comment},
+		activity   => $jira->{worklogAttributes}[0]{value},
+	};
 }
 
 sub print_wtline {
@@ -454,7 +488,9 @@ sub print_wtline {
 		_print_time($wt->{start_time}),
 		_print_time($wt->{end_time}),
 		$wt->{project},
-		$wt->{comment}."\n";
+		$wt->{comment},
+		$wt->{activity},
+		"\n";
 }
 
 sub uri_escape_hash {
@@ -549,7 +585,7 @@ sub parse_time {
 			$time->{M} = 0+$2;
 			$time->{S} = 0;
 		}
-		elsif ($dstr =~ /^(\d\d?):(\d\d?):(\d\d?)$/) {
+		elsif ($dstr =~ /^(\d\d?):(\d\d?):(\d\d?)/) { # drop fractional seconds
 			$time->{H} = 0+$1;
 			$time->{M} = 0+$2;
 			$time->{S} = 0+$3;
@@ -571,8 +607,8 @@ sub format_date {
 	my @lt = localtime(time);
 	my $res = _print_date($date)
 			. 'T'
-			. _print_time($time)
-			. ($lt[8] ? '+2000' : '+1000');
+			. _print_time($time);
+			#. ($lt[8] ? '+2000' : '+1000');
 	return $res;
 }
 
@@ -595,12 +631,24 @@ sub time_spent {
 	}
 }
 
+sub increment_time {
+		my ($start, $increment) = @_;
+		
+		my $t = $start->{H} * 3600 + $start->{M} * 60 + $start->{S};
+		$t += $increment;
+		$t = 86400 if $t > 86400; # FIXME
+		my $h = int($t / 3600);
+		my $m = int($t / 60) % 60;
+		my $s = $t % 60;
+		return { H => $h, M => $m, S => $s };
+}
+
 sub get_pw {
 	ReadMode 2;
 	print "JIRA Password:";
 	my $pw = <STDIN>;
-	print "\n";
 	ReadMode 0;
+	print "\n";
 	chomp $pw;
 	return $pw;
 }
