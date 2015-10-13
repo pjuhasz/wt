@@ -601,5 +601,6 @@ sub get_pw {
 	my $pw = <STDIN>;
 	print "\n";
 	ReadMode 0;
+	chomp $pw;
 	return $pw;
 }
