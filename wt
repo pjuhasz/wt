@@ -173,7 +173,13 @@ sub list_local {
 	for my $wt (@{$state->{local}}) {
 		print print_wtline($wt, $i++);
 	}
-	say "No local wt records." unless scalar @{$state->{local}};
+	if ($state->{local}) {
+		say "";
+		say summary($state->{local});
+	}
+	else {
+		say "No local wt records.";
+	}
 }
 
 sub rm {
@@ -274,10 +280,9 @@ sub query {
 		
 		if ( $response->is_success() ) {
 			$state->{remote} = decode_json $response->decoded_content;
-			my $i = 1;
-			for my $csira (@{$state->{remote}}) {
-				print print_wtline(jira_json_to_wtline($csira), $i++);
-			}
+			
+			list_remote("No worklog records in the specified date range.");
+			
 			save_state($state_fn, $state);
 
 		}
@@ -288,11 +293,7 @@ sub query {
 	}
 	else {
 		# print last saved query, don't actually ask jira
-		my $i = 1;
-		for my $csira (@{$state->{remote}}) {
-			print print_wtline(jira_json_to_wtline($csira), $i++);
-		}
-		say "There is no saved query." unless scalar @{$state->{remote}};
+		list_remote("There is no saved query.");
 	} 
 	
 }
@@ -500,6 +501,33 @@ sub uri_escape_hash {
         push @pairs, join "=", map { uri_escape($_) } $key, $hash{$key};
     }
     return join "&", @pairs;
+}
+
+sub summary {
+	my $wt_arr = shift;
+	
+	my %projects;
+	for my $wt (@$wt_arr) {
+		$projects{ $wt->{project} } += time_spent($wt->{start_time}, $wt->{end_time});
+	}
+
+	return join "\n", map { $_."\t".($projects{$_}/3600) } sort { $projects{$a} <=> $projects{$b} } keys %projects;
+}
+
+sub list_remote {
+	my $msg = shift;
+	my $i = 1;
+	my @remote = @{$state->{remote}};
+	for my $csira (@remote) {
+		print print_wtline(jira_json_to_wtline($csira), $i++);
+	}
+	if (@remote) {
+		say summary([ map {jira_json_to_wtline($_)} @remote ]);
+	}
+	else {
+		say "";
+		say $msg;
+	}
 }
 
 ###############
