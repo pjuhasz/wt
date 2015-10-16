@@ -173,7 +173,7 @@ sub list_local {
 	for my $wt (@{$state->{local}}) {
 		print print_wtline($wt, $i++);
 	}
-	if ($state->{local}) {
+	if (@{$state->{local}}) {
 		say "";
 		say summary($state->{local});
 	}
