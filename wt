@@ -281,6 +281,8 @@ sub query {
 		if ( $response->is_success() ) {
 			$state->{remote} = decode_json $response->decoded_content;
 			
+			$state->{issues} = issue_summaries_from_remote($state->{remote});
+			
 			list_remote("No worklog records in the specified date range.");
 			
 			save_state($state_fn, $state);
@@ -503,15 +505,37 @@ sub uri_escape_hash {
     return join "&", @pairs;
 }
 
+sub issue_summaries_from_remote {
+	my $issuelist = shift;
+	
+	my %hash;
+	
+	for my $csira (@$issuelist) {
+		$hash{$csira->{issue}{key}} = $csira->{issue}{summary};
+	}
+	return \%hash;
+}
+
 sub summary {
 	my $wt_arr = shift;
 	
-	my %projects;
+	my %times;
+	my $cumulative_time = 0;
 	for my $wt (@$wt_arr) {
-		$projects{ $wt->{project} } += time_spent($wt->{start_time}, $wt->{end_time});
+		my $dt = time_spent($wt->{start_time}, $wt->{end_time});
+		$times{ $wt->{project} } += $dt;
+		$cumulative_time += $dt;
 	}
 
-	return join "\n", map { $_."\t".($projects{$_}/3600) } sort { $projects{$a} <=> $projects{$b} } keys %projects;
+	my $summary_lines = join "", map {
+			sprintf("% .2f\t%s\t%s\n", ($times{$_}/3600), $_, (exists $state->{issues}{$_} ? $state->{issues}{$_} : ""))
+		} 
+		sort { 
+			$times{$b} <=> $times{$a} 
+		} 
+		keys %times;
+	
+	return $summary_lines . "------\n" . sprintf "%.2f", $cumulative_time/3600;
 }
 
 sub list_remote {
@@ -522,10 +546,10 @@ sub list_remote {
 		print print_wtline(jira_json_to_wtline($csira), $i++);
 	}
 	if (@remote) {
+		say "";
 		say summary([ map {jira_json_to_wtline($_)} @remote ]);
 	}
 	else {
-		say "";
 		say $msg;
 	}
 }
