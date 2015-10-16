@@ -87,6 +87,12 @@ An optional third argument can be used to filter for project name.
 If called without dates, prints the results of the last query
 (but doesn't start a new query).
 
+=head2 ISSUES
+
+    wt :|issues [STRING]
+
+Query a list of issues matching STRING from JIRA and print them.
+
 =head2 RM
 
     wt rm INDEX|all
@@ -137,10 +143,13 @@ my $state  = load_state($state_fn);
 
 my $action = shift @ARGV;
 
+binmode STDOUT, ":encoding(UTF-8)";
+
 for ($action) {
 	when (undef)           { list_local(); }
 	when ([qw/start s/])   { set_mark();   }
 	when ([qw/commit ci/]) { commit();     }
+	when ([qw/issues :/])  { get_issues(); }
 	when ("report")        { query();      }
 	when ([qw/help h/])    { help();       }
 	when ([qw/add a/])     { add();        }
@@ -158,6 +167,7 @@ sub help {
 		when (undef)           { pod2usage({-verbose => 99, -sections => "SYNOPSIS|USAGE"});     }
 		when ([qw/start s/])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/START"});  }
 		when ([qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"}); }
+		when ([qw/issues :/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ISSUES"}); }
 		when ("report")        { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}); }
 		when ([qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
 		when ([qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
@@ -262,8 +272,6 @@ sub query {
 		
 		my $project = shift @ARGV;
 		
-		
-		
 		my $pw = get_pw();
 		
 		my $url = $config->{jira_base_url}.$config->{worklog_url};
@@ -297,6 +305,61 @@ sub query {
 		# print last saved query, don't actually ask jira
 		list_remote("There is no saved query.");
 	} 
+	
+}
+
+sub get_issues {
+	my $filter = shift @ARGV;
+	my $jql;
+	if (not defined $filter) {
+		$jql = undef;
+	}
+	elsif ($filter =~ /\w+-\d+/) {
+		$jql = "issue=$filter";
+	}
+	elsif ($filter =~ /\w+/) {
+		$jql = "project=$filter";
+	}
+	else {
+		return;
+	}
+
+	my $pw = get_pw();
+	
+	my $json = encode_json {
+		"jql" => $jql,
+		"startAt" => 0,
+		"maxResults" => 100,
+		"fields" => [
+			"summary",
+			"status",
+			"assignee"
+		]
+	};
+	my $jira_url = $config->{jira_base_url}.$config->{search_url};
+	my $req = HTTP::Request->new('POST', $jira_url);
+	$req->header('Content-Type' => 'application/json;charset=UTF-8');
+	$req->authorization_basic($config->{user_name}, $pw);
+	$req->content($json);
+
+	my $ua = LWP::UserAgent->new;
+	my $response = $ua->request($req);
+	
+	if ( $response->is_success() ) {
+		my $raw_data = decode_json $response->decoded_content;
+		say for map { 
+				join "\t", 
+					$_->{key}, 
+					$_->{fields}{status}{statusCategory}{name}, 
+					$_->{fields}{assignee}{name}, 
+					$_->{fields}{summary}
+				} 
+			@{$raw_data->{issues}};
+	}
+	else {
+		warn "JIRA responded with ".$response->status_line."\n";
+		say Dumper $response;
+	}
 	
 }
 
