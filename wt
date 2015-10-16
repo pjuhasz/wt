@@ -136,6 +136,15 @@ use Time::Local;
 use Data::Dumper;
 use URI::Escape;
 
+our $have_keyring;
+BEGIN {
+	$have_keyring = eval {
+		require Passwd::Keyring::Auto;
+		Passwd::Keyring::Auto->import();
+		1;
+	};
+}
+
 my $config_fn = File::Spec->catfile($ENV{HOME}, ".wt", "wt.conf");
 my $state_fn  = File::Spec->catfile($ENV{HOME}, ".wt", "wt.state");
 my $config = load_config($config_fn);
@@ -251,6 +260,7 @@ sub commit {
 			shift @{$state->{local}};
 		}
 		else {
+			forget_pw() if $response->code() == 401;
 			warn "JIRA responded with ".$response->status_line."\n";
 			say Dumper $response;
 		}
@@ -297,6 +307,7 @@ sub query {
 
 		}
 		else {
+			forget_pw() if $response->code() == 401;
 			die "JIRA responded with ".$response->status_line."\n";
 		}
 		
@@ -357,6 +368,7 @@ sub get_issues {
 			@{$raw_data->{issues}};
 	}
 	else {
+		forget_pw() if $response->code() == 401;
 		warn "JIRA responded with ".$response->status_line."\n";
 		say Dumper $response;
 	}
@@ -759,6 +771,31 @@ sub increment_time {
 }
 
 sub get_pw {
+	my $pw;
+	if ($have_keyring) {
+		my $keyring = get_keyring(app=>"wt_client", group=>"wt_client");
+		my $username = $config->{user_name};
+		$pw = $keyring->get_password($username, "wt_client");
+		if(!$pw) {
+			$pw = read_pw_from_console();
+			$keyring->set_password($username, $pw, "wt_client");
+		}
+	}
+	else {
+		$pw = read_pw_from_console();
+	}
+	return $pw;
+}
+
+sub forget_pw {
+	if ($have_keyring) {
+		my $keyring = get_keyring(app=>"wt_client", group=>"wt_client");
+		my $username = $config->{user_name};
+		$keyring->clear_password($username, "wt_client");
+	}
+}
+
+sub read_pw_from_console {
 	ReadMode 2;
 	print "JIRA Password:";
 	my $pw = <STDIN>;
