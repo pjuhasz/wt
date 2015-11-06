@@ -56,6 +56,8 @@ By default, the date for the entry is the current date. This can be overridden
 by the -d switch, which requires a date string in YYYY-MM-DD format. 
 If the year or month is omitted, the current year or month is substituted.
 
+The -y switch sets the date to yesterday.
+
 =head2 COMMIT
 
     wt commit
@@ -135,6 +137,7 @@ use File::Spec;
 use Time::Local;
 use Data::Dumper;
 use URI::Escape;
+use DateTime;
 
 our $have_keyring;
 BEGIN {
@@ -393,6 +396,11 @@ sub add {
 		die "Error: you must specify a date with -d\n" unless defined $date_override;
 		$date = parse_date($date_override);
 		help("add") unless $date;
+		$interval = shift @ARGV;
+		help("add") unless defined $interval;
+	}
+	elsif ($interval eq "-y") {
+		$date = _yesterday();
 		$interval = shift @ARGV;
 		help("add") unless defined $interval;
 	}
@@ -762,6 +770,11 @@ sub time_spent {
 	else {
 		return abs($e - $s);
 	}
+}
+
+sub _yesterday {
+	my $dt = DateTime->now()->subtract( days => 1 );
+	return {Y => $dt->year(), M => $dt->month(), D => $dt->day()};
 }
 
 sub increment_time {
