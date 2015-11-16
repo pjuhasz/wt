@@ -546,6 +546,7 @@ sub wtline_to_jira_json {
 		comment => $wtline->{comment},
 		dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
 		timeSpentSeconds => $time_spent, #seconds
+		billedSeconds => 0,
 		#projectId => 10400, # FIXME
 		worklogAttributes => [
 			 {
