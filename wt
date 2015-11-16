@@ -438,6 +438,11 @@ sub add {
 			$project = $state->{current_project};
 			die "Error: no current project available\n" unless defined $project;
 		}
+		elsif ($project_str eq "lunch") {
+			# special hack: shortcut for lunch
+			$project = $config->{lunch_project};
+			die "Error: lunch project is not defined, edit wt.conf\n" unless defined $project;
+		}
 		else {
 			$project = uc $project_str;
 			$project_str //= "";
@@ -451,10 +456,15 @@ sub add {
 
 	# third argument: comment
 	my $comment = shift @ARGV;
+	# special hack: no comment is required for lunch
+	$comment = "lunch" if not defined $comment and $project_str eq "lunch";
 	die "Error: Comment is required\n" unless defined $comment;
 
 	# fourth argument: activity type
-	my $activity = shift @ARGV // 'Dev';
+	my $activity = shift @ARGV;
+	# special hack: no comment is required for lunch
+	$activity = "Break" if not defined $activity and $project_str eq "lunch";
+	$activity //= 'Dev';
 
 	# assemble ojject and save it
 	my $wtline = {
