@@ -23,7 +23,7 @@ Available subcommands:
 
 =head2 ADD
 
-    wt add [-d DATE] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT [ACTIVITY]
+    wt add [-d DATE|-y] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT [ACTIVITY]
 
 Adds an entry to the local list of wt entries.
 
@@ -57,6 +57,17 @@ by the -d switch, which requires a date string in YYYY-MM-DD format.
 If the year or month is omitted, the current year or month is substituted.
 
 The -y switch sets the date to yesterday.
+
+Specifying "lunch" as the issue name will cause the following:
+
+=item The project name will be substituted from the "lunch-project" key in 
+wt.conf. If that key doesn't exist, the program terminates with an error.
+
+=item The comment becomes optional, if omitted, "lunch" will be substituted.
+
+=item The activity type will be set to "Break" unless explicitly overridden.
+
+=back
 
 =head2 COMMIT
 
