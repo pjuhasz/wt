@@ -213,6 +213,17 @@ sub list_local {
 	else {
 		say "No local wt records.";
 	}
+
+	if (defined $state->{start_mark}) {
+		my $interval = time_spent(parse_time(undef), $state->{start_mark});
+		my ($h, $m, $s);
+		$h = int($interval / 3600); $interval -= $h * 3600;
+		$m = int($interval /   60); $interval -= $m *   60;
+		$s = int($interval);
+		$interval = ($h || '') . ($h ? ':' : '') . pad($m)  . ':' . pad($s);
+		my $on_project =  defined $state->{current_project} ? "on issue $state->{current_project}" : "";
+		say "Unlogged work: $interval $on_project";
+	}
 }
 
 sub rm {
