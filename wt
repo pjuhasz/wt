@@ -330,7 +330,7 @@ sub query {
 		if ( $response->is_success() ) {
 			$state->{remote} = decode_json $response->decoded_content;
 			
-			$state->{issues} = issue_summaries_from_remote($state->{remote});
+			update_saved_issue_summaries($state->{remote}, from => 'remote');
 			
 			list_remote("No worklog records in the specified date range.");
 			
@@ -397,6 +397,9 @@ sub get_issues {
 					$_->{fields}{summary}
 				} 
 			@{$raw_data->{issues}};
+
+		update_saved_issue_summaries($raw_data->{issues}, from => 'issuelist');
+		save_state($state_fn, $state);
 	}
 	else {
 		forget_pw() if $response->code() == 401;
@@ -627,15 +630,21 @@ sub uri_escape_hash {
     return join "&", @pairs;
 }
 
-sub issue_summaries_from_remote {
+sub update_saved_issue_summaries {
 	my $issuelist = shift;
-	
-	my %hash;
-	
-	for my $csira (@$issuelist) {
-		$hash{$csira->{issue}{key}} = $csira->{issue}{summary};
+	my %args = @_;
+
+	my %actions = (
+		remote => sub {
+				$state->{issues}->{ $_->{issue}{key} } = $_->{issue}{summary} for @_;
+			},
+		issuelist => sub {
+				$state->{issues}->{ $_->{key} } = $_->{fields}{summary} for @_;
+			}
+	);
+	if (defined $args{from} and exists $actions{ $args{from} }) {
+		$actions{ $args{from} }->(@$issuelist);
 	}
-	return \%hash;
 }
 
 sub summary {
