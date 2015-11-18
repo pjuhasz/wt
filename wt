@@ -392,7 +392,7 @@ sub get_issues {
 		say for map { 
 				join "\t", 
 					$_->{key}, 
-					$_->{fields}{status}{statusCategory}{name}, 
+					$_->{fields}{status}{name}, 
 					$_->{fields}{assignee}{name}, 
 					$_->{fields}{summary}
 				} 
