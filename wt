@@ -15,6 +15,7 @@ Available subcommands:
     wt start [-c] [ISSUE]
     wt report [START] [END] [ISSUE]
     wt rm INDEX|all
+    wt issues [-a] [-s|-j] [-m NUM] STRING
     wt
     wt help [SUBCOMMAND]
 
@@ -72,6 +73,7 @@ wt.conf. If that key doesn't exist, the program terminates with an error.
 =head2 COMMIT
 
     wt commit
+    wt ci
 
 Attempt to commit local wt entries to JIRA.
 Successfully committed entries are deleted from the list.
@@ -79,6 +81,7 @@ Successfully committed entries are deleted from the list.
 =head2 START
 
 	wt start [-c|--change] [ISSUE]
+	wt s ...
 
 Saves a timestamp with the current time. In effect, this command means
 "I'm starting work now". An optional project (issue) name can be specified,
@@ -87,6 +90,7 @@ it will be saved as the current project.
 =head2 REPORT
 
     wt report [START] [END] [PROJECT]
+    wt r ...
 
 Queries worklog entries from JIRA.
 If this subcommand is called with two date arguments, worklog entries between the two date
@@ -102,9 +106,31 @@ If called without dates, prints the results of the last query
 
 =head2 ISSUES
 
-    wt :|issues [STRING]
+    wt issues [-a] [-s|-j] [-m NUM] [STRING]
+    wt : ...
 
-Query a list of issues matching STRING from JIRA and print them.
+Query issues matching STRING from JIRA and print the resulting list.
+
+Each entry contains the issue number, status, assignee and summary.
+
+The list is sorted by date, latest is on the bottom.
+
+If STRING looks like a JIRA issue (e.g. CG-54), it is assumed to be an issue number,
+and the resulting list will contain that one issue (at most).
+Otherwise, it is assumed to be a project number, and all issues under that project
+are returned (if the project exists).
+
+The -s or --summary switch can be used to search in the issue summaries instead.
+In this case all issues are reported whose summaries match STRING.
+
+Alternatively, the -j or --jql switch can be used to pass a raw JQL query string to JIRA.
+The query string is not validated, just passed as is.
+
+The -a or --assigned switch can be used to restrict the search to those issues 
+that are assigned to the current user.
+
+The -m or --max switch can be used to override the maximum number of issues reported, 
+by default 100.
 
 =head2 RM
 
@@ -131,9 +157,6 @@ Prints available subcommands if called without arguments,
 or detailed help for a subcommand.
 
 =cut
-
-## TODO
-# commit, query
 
 use strict;
 use warnings;
@@ -355,27 +378,45 @@ sub query {
 }
 
 sub get_issues {
+	my $assigned_to_me = 0;
+	my $summary = 0;
+	my $max = 100;
+	my $raw_jql;
+	GetOptions(
+		'assigned!' => \$assigned_to_me,
+		'summary!'  => \$summary,
+		'max=i'     => \$max,
+		'jql=s'     => \$raw_jql,
+	) or pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ISSUES"});
+
 	my $filter = shift @ARGV;
-	my $jql;
-	if (not defined $filter) {
-		$jql = undef;
+	my @jql;
+	if (defined $filter) {
+		if ($raw_jql) {
+			push @jql, $filter;
+		}
+		elsif ($summary) {
+			push @jql, "summary ~ $filter";
+		}
+		elsif ($filter =~ /\w+-\d+/) {
+			push @jql, "issue = $filter";
+		}
+		else {
+			push @jql, "project = $filter";
+		}
 	}
-	elsif ($filter =~ /\w+-\d+/) {
-		$jql = "issue=$filter";
+	if ($assigned_to_me) {
+		push @jql, "assignee = " . $config->{user_name};
 	}
-	elsif ($filter =~ /\w+/) {
-		$jql = "project=$filter";
-	}
-	else {
-		return;
-	}
+	my $jql = join " and ", @jql;
+	$jql .= " order by createddate desc" if $jql;
 
 	my $pw = get_pw();
 	
 	my $json = encode_json {
 		"jql" => $jql,
 		"startAt" => 0,
-		"maxResults" => 100,
+		"maxResults" => $max,
 		"fields" => [
 			"summary",
 			"status",
@@ -393,11 +434,11 @@ sub get_issues {
 	
 	if ( $response->is_success() ) {
 		my $raw_data = decode_json $response->decoded_content;
-		say for map { 
-				join "\t", 
+		say for reverse map { 
+				sprintf "%-8s%-16s%-16s%s", 
 					$_->{key}, 
-					$_->{fields}{status}{name}, 
-					$_->{fields}{assignee}{name}, 
+					_trunc($_->{fields}{status}{name}, 15), 
+					$_->{fields}{assignee}{name} // "", 
 					$_->{fields}{summary}
 				} 
 			@{$raw_data->{issues}};
@@ -408,7 +449,8 @@ sub get_issues {
 	else {
 		forget_pw() if $response->code() == 401;
 		warn "JIRA responded with ".$response->status_line."\n";
-		say Dumper $response;
+		my $error = decode_json $response->decoded_content;
+		say STDERR $error->{errorMessages}[0];
 	}
 	
 }
@@ -782,6 +824,12 @@ sub parse_time {
 		}
 	}
 	return $time;
+}
+
+sub _trunc {
+	my ($text, $len) = @_;
+	my $shortened = $len - 3;
+	length $text > $shortened ? substr($text, 0, $shortened).'...' : $text;
 }
 
 sub pad {
