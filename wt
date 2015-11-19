@@ -158,6 +158,12 @@ or detailed help for a subcommand.
 
 =cut
 
+# TODO rewrite add subcommand 
+# * use getopts
+# * add -c option to instacommit
+# * add + alias
+# * add -a option to change activity type, join remainder of @ARGV to make "" unneeded
+
 use strict;
 use warnings;
 no warnings qw/experimental/;
