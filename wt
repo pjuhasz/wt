@@ -278,7 +278,7 @@ sub set_mark {
 	my $change = 0;
 	GetOptions(
 		'change!' => \$change,
-	) or pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/START"});
+	) or help('start');
 
 	unless ($change) {
 		$state->{start_mark} = parse_time(undef);
@@ -387,7 +387,7 @@ sub get_issues {
 		'summary!'  => \$summary,
 		'max=i'     => \$max,
 		'jql=s'     => \$raw_jql,
-	) or pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ISSUES"});
+	) or help('issues');
 
 	my $filter = shift @ARGV;
 	my @jql;
