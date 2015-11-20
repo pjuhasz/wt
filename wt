@@ -192,11 +192,6 @@ or detailed help for a subcommand.
 
 =cut
 
-# TODO rewrite add subcommand 
-# * add -c option to instacommit
-# * add + alias
-# * add -a option to change activity type, join remainder of @ARGV to make "" unneeded
-
 use strict;
 use warnings;
 no warnings qw/experimental/;
@@ -336,7 +331,6 @@ sub set_mark {
 }
 
 sub commit {
-	
 	my $pw = get_pw();
 
 	my @lines = @{$state->{local}};
@@ -363,7 +357,7 @@ sub commit {
 		}
 		
 	}
-	
+
 	save_state($state_fn, $state);
 }
 
@@ -599,7 +593,7 @@ sub add {
 	list_local();
 
 	if ($autocommit) {
-		# TODO
+		commit();
 	}
 }
 
