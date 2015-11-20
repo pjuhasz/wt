@@ -562,7 +562,7 @@ sub add {
 	# rest of @ARGV is concatenated so that quotes are not needed
 	my $comment = "@ARGV";
 	# special hack: no comment is required for lunch
-	$comment = "lunch" if not defined $comment and $project_str eq "lunch";
+	$comment = "lunch" if $comment eq '' and $project_str eq "lunch";
 	die "Error: Comment is required\n" unless defined $comment;
 
 	# activity may have been set by option
