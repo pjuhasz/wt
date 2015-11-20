@@ -355,9 +355,9 @@ sub commit {
 		else {
 			forget_pw() if $response->code() == 401;
 			warn "JIRA responded with ".$response->status_line."\n";
-			say Dumper $response;
+			my $error = decode_json $response->decoded_content;
+			say STDERR $error->{errorMessages}[0];
 		}
-		
 	}
 
 	save_state($state_fn, $state);
@@ -368,7 +368,7 @@ sub query {
 	
 	if (defined $start_date_str) {
 		my $start_date = parse_date($start_date_str);
-		pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}) unless defined $start_date;
+		help('report') unless defined $start_date;
 		 
 		my $end_date_str = shift @ARGV;
 		my $end_date = parse_date($end_date_str);
@@ -401,7 +401,9 @@ sub query {
 		}
 		else {
 			forget_pw() if $response->code() == 401;
-			die "JIRA responded with ".$response->status_line."\n";
+			warn "JIRA responded with ".$response->status_line."\n";
+			my $error = decode_json $response->decoded_content;
+			say STDERR $error->{errorMessages}[0];
 		}
 		
 	}
