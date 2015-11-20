@@ -10,7 +10,7 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt add [-d DATE|-y] [-c] [-a ACTIVITY] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-a ACTIVITY] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
     wt commit
     wt start [-c] [ISSUE]
     wt report [START] [END] [ISSUE]
@@ -24,7 +24,7 @@ Available subcommands:
 
 =head2 ADD
 
-    wt add [-d DATE|-y] [-c] [-a ACTIVITY] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-a ACTIVITY] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
 
 Adds an entry to the local list of wt entries.
 
@@ -103,6 +103,8 @@ wt.conf. If that key doesn't exist, the program terminates with an error.
 =item The activity type will be set to "Break" unless explicitly overridden.
 
 =back
+
+The C<add> keyword may be omitted.
 
 =head2 COMMIT
 
@@ -235,7 +237,7 @@ for ($action) {
 	when ([qw/help h/])    { help();       }
 	when ([qw/add a/])     { add();        }
 	when ("rm")            { rm();         }
-	default                { help();       }
+	default                { unshift @ARGV, $action; add(); }
 }
 
 
