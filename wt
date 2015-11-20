@@ -10,7 +10,7 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt add [-d DATE|-y] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT [ACTIVITY]
+    wt add [-d DATE|-y] [-c] [-a ACTIVITY] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
     wt commit
     wt start [-c] [ISSUE]
     wt report [START] [END] [ISSUE]
@@ -24,42 +24,76 @@ Available subcommands:
 
 =head2 ADD
 
-    wt add [-d DATE|-y] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT [ACTIVITY]
+    wt add [-d DATE|-y] [-c] [-a ACTIVITY] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
 
 Adds an entry to the local list of wt entries.
 
-There are three mandatory arguments:
+=head3 There are three mandatory arguments:
 
-    Interval: starting and ending time in HH:MM format, separated by a dash.
-        If minutes are omitted, HH:00 is assumed.
+=over
 
-        If the starting time is omitted altogether, 
-        the saved start mark is used instead, if available.
-        It is an error to omit the start if no start mark is available.
+=item Interval
 
-        If the ending time is omitted altogether, the current time is assumed.
-        
-        The ending time is also saved for the start mark of the next
-        "wt add" command. Thus, the interval argument may consist of 
-        just a single dash in certain cases, meaning 
-        "from the end of the last entry till now".
+Starting and ending time in B<HH:MM> format, separated by a dash.
+If minutes are omitted, B<HH:00> is assumed.
 
-    Issue: project or issue identifier, in PROJECT-NUMER format.
-        A single dash means to use the current project, if one is available.
+If the starting time is omitted altogether, 
+the saved start mark is used instead, if available.
+It is an error to omit the start if no start mark is available.
 
-    Comment: arbitrary text (can contain spaces etc. if quoted) to describe
-        the task/bugfix etc.
+If the ending time is omitted altogether, the current time is assumed.
 
-The fourth, optional argument specifies the activity type. 
-If omitted, it is set to "Dev".
+The ending time is also saved for the start mark of the next
+C<wt add> command. Thus, the interval argument may consist of 
+just a single dash in certain cases, meaning 
+"from the end of the last entry till now".
+
+=item Issue
+
+Project or issue identifier, in B<PROJECT-NUMBER> format.
+A single dash means to use the current project, if one is available.
+
+=item Comment
+
+Arbitrary text (can contain spaces etc. if quoted) to describe
+the task/bugfix etc.
+
+=back
+
+=head3 Options to the B<add> subcommand
+
+=over
+
+=item C<-a> Activity type
+
+JIRA requires an activity type for each worklog entry. This can be
+overridden with the C<-a> or C<--activity> switch.
+The default activity type is "Dev".
+
+=item C<-d> Set date
 
 By default, the date for the entry is the current date. This can be overridden
-by the -d switch, which requires a date string in YYYY-MM-DD format. 
+by the C<-d> or C<--date> switch, which requires a date string in YYYY-MM-DD format. 
 If the year or month is omitted, the current year or month is substituted.
 
-The -y switch sets the date to yesterday.
+=item C<-y> Yesterday
+
+The C<-y> or C<--yesterday> switch sets the date to yesterday.
+
+=item C<-c> Autocommit
+
+By default, the C<add> subcommand only adds the entry to the local list, 
+which must be committed with C<wt commit> separately.
+
+This switch causes the entry to be committed immediately.
+
+=back
+
+=head3 Lunch and breaks
 
 Specifying "lunch" as the issue name will cause the following:
+
+=over
 
 =item The project name will be substituted from the "lunch-project" key in 
 wt.conf. If that key doesn't exist, the program terminates with an error.
@@ -466,14 +500,18 @@ sub add {
 	# get current date as default
 	my $date = parse_date(undef);
 
+	# defaults
+	my $autocommit = 0;
+	my $activity = undef;
+
 	# need to check if first arg is interval spec (single dash or dash-number)
 	# before calling GetOptions
-	my $autocommit = 0;
 	unless ($ARGV[0] =~ /^\-$|^\-\d/) {
 		GetOptions(
 			'date=s'     => sub { $date = parse_date($_[1]); },
 			'yesterday!' => sub { $date = _yesterday(); },
 			'commit!'    => \$autocommit,
+			'activity=s' => \$activity,
 		) or help('add');
 	}
 
@@ -525,13 +563,13 @@ sub add {
 	}
 
 	# third argument: comment
-	my $comment = shift @ARGV;
+	# rest of @ARGV is concatenated so that quotes are not needed
+	my $comment = "@ARGV";
 	# special hack: no comment is required for lunch
 	$comment = "lunch" if not defined $comment and $project_str eq "lunch";
 	die "Error: Comment is required\n" unless defined $comment;
 
-	# fourth argument: activity type
-	my $activity = shift @ARGV;
+	# activity may have been set by option
 	# special hack: no comment is required for lunch
 	$activity = "Break" if not defined $activity and $project_str eq "lunch";
 	$activity //= 'Dev';
