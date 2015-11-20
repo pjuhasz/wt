@@ -353,10 +353,7 @@ sub commit {
 			shift @{$state->{local}};
 		}
 		else {
-			forget_pw() if $response->code() == 401;
-			warn "JIRA responded with ".$response->status_line."\n";
-			my $error = decode_json $response->decoded_content;
-			say STDERR $error->{errorMessages}[0];
+			_handle_jira_error($response);
 		}
 	}
 
@@ -369,41 +366,37 @@ sub query {
 	if (defined $start_date_str) {
 		my $start_date = parse_date($start_date_str);
 		help('report') unless defined $start_date;
-		 
+
 		my $end_date_str = shift @ARGV;
 		my $end_date = parse_date($end_date_str);
-		
+
 		my $project = shift @ARGV;
-		
+
 		my $pw = get_pw();
-		
+
 		my $url = $config->{jira_base_url}.$config->{worklog_url};
-		
+
 		my %query_hash = (dateFrom => _print_date($start_date), dateTo => _print_date($end_date), username => $config->{user_name});
 		$query_hash{projectKey} = $project if defined $project;
 		my $query_string = uri_escape_hash(%query_hash);
-		
+
 		my $req = HTTP::Request->new('GET', $url."?".$query_string);
 		$req->authorization_basic($config->{user_name}, $pw);
 
 		my $ua = LWP::UserAgent->new;
 		my $response = $ua->request($req);
-		
+
 		if ( $response->is_success() ) {
 			$state->{remote} = decode_json $response->decoded_content;
-			
-			update_saved_issue_summaries($state->{remote}, from => 'remote');
-			
-			list_remote("No worklog records in the specified date range.");
-			
-			save_state($state_fn, $state);
 
+			update_saved_issue_summaries($state->{remote}, from => 'remote');
+
+			list_remote("No worklog records in the specified date range.");
+
+			save_state($state_fn, $state);
 		}
 		else {
-			forget_pw() if $response->code() == 401;
-			warn "JIRA responded with ".$response->status_line."\n";
-			my $error = decode_json $response->decoded_content;
-			say STDERR $error->{errorMessages}[0];
+			_handle_jira_error($response);
 		}
 		
 	}
@@ -411,7 +404,7 @@ sub query {
 		# print last saved query, don't actually ask jira
 		list_remote("There is no saved query.");
 	} 
-	
+
 }
 
 sub get_issues {
@@ -484,10 +477,7 @@ sub get_issues {
 		save_state($state_fn, $state);
 	}
 	else {
-		forget_pw() if $response->code() == 401;
-		warn "JIRA responded with ".$response->status_line."\n";
-		my $error = decode_json $response->decoded_content;
-		say STDERR $error->{errorMessages}[0];
+		_handle_jira_error($response);
 	}
 	
 }
@@ -766,6 +756,15 @@ sub list_remote {
 	else {
 		say $msg;
 	}
+}
+
+sub _handle_jira_error {
+	my $response = shift;
+
+	forget_pw() if $response->code() == 401;
+	warn "JIRA responded with ".$response->status_line."\n";
+	my $error = decode_json $response->decoded_content;
+	say STDERR join "\n", @{$error->{errorMessages}};
 }
 
 ###############
