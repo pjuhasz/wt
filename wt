@@ -159,7 +159,6 @@ or detailed help for a subcommand.
 =cut
 
 # TODO rewrite add subcommand 
-# * use getopts
 # * add -c option to instacommit
 # * add + alias
 # * add -a option to change activity type, join remainder of @ARGV to make "" unneeded
@@ -462,31 +461,26 @@ sub get_issues {
 }
 
 sub add {
-	my $interval = shift @ARGV;
-	
-	help("add") unless defined $interval;
-	
-	# optional first argument: date
-	my $date = parse_date(undef); # get current date
-	if ($interval eq "-d") {
-		my $date_override = shift @ARGV;
-		die "Error: you must specify a date with -d\n" unless defined $date_override;
-		$date = parse_date($date_override);
-		help("add") unless $date;
-		$interval = shift @ARGV;
-		help("add") unless defined $interval;
-	}
-	elsif ($interval eq "-y") {
-		$date = _yesterday();
-		$interval = shift @ARGV;
-		help("add") unless defined $interval;
+	help("add") unless defined $ARGV[0];
+
+	# get current date as default
+	my $date = parse_date(undef);
+
+	# need to check if first arg is interval spec (single dash or dash-number)
+	# before calling GetOptions
+	my $autocommit = 0;
+	unless ($ARGV[0] =~ /^\-$|^\-\d/) {
+		GetOptions(
+			'date=s'     => sub { $date = parse_date($_[1]); },
+			'yesterday!' => sub { $date = _yesterday(); },
+			'commit!'    => \$autocommit,
+		) or help('add');
 	}
 
 	# first argument: from-to time
+	my $interval = shift @ARGV;
 	my ($s, $e) = split '-', $interval;
-	
-	#print Dumper $s, $e, $state;
-	
+
 	# If from is not specified, try to use saved start mark.
 	# If there is no start mark either, give up.
 	my $start_time;
@@ -528,7 +522,6 @@ sub add {
 	}
 	else {
 		die "Error: project name is mandatory\n";
-
 	}
 
 	# third argument: comment
@@ -566,8 +559,10 @@ sub add {
 
 	save_state($state_fn, $state);
 	list_local();
-	#print Dumper $state;
 
+	if ($autocommit) {
+		# TODO
+	}
 }
 
 ###############
