@@ -209,6 +209,8 @@ use Data::Dumper;
 use URI::Escape;
 use DateTime;
 use Getopt::Long;
+use Encode::Locale;
+use Encode;
 
 our $have_keyring;
 BEGIN {
@@ -223,6 +225,8 @@ my $config_fn = File::Spec->catfile($ENV{HOME}, ".wt", "wt.conf");
 my $state_fn  = File::Spec->catfile($ENV{HOME}, ".wt", "wt.state");
 my $config = load_config($config_fn);
 my $state  = load_state($state_fn);
+
+@ARGV = map { decode(locale => $_, 1) } @ARGV;
 
 my $action = shift @ARGV;
 
