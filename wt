@@ -192,6 +192,29 @@ List local wt entries.
 Prints available subcommands if called without arguments,
 or detailed help for a subcommand.
 
+=head1 FILES
+
+This program relies on two files called C<wt.conf> and C<wt.state>,
+used to store user preferences and persistent state, respectively.
+
+These files are expected to be in a directory called C<.wt> under the user's
+home directory.
+
+C<wt.conf>, the configuration file should be edited by the user before
+attempting to use the program. It must be a valid JSON file. It must have
+the following mandatory keys:
+
+
+Example:
+	{
+			"jira_base_url": "https://my.awesome.company.com/jira",
+			"worklog_url": "/rest/tempo-timesheets/3/worklogs/",
+			"search_url": "/rest/api/2/search",
+			"user_name": "homer.simpson",
+			"lunch_project": "CMPS-19"
+	}
+
+
 =cut
 
 use strict;
@@ -619,6 +642,11 @@ sub _save_json {
 sub load_config {
 	my $config = _load_json($_[0]);
 	die "Can't load config file $_[0]\n" unless $config;
+	die "Missing key from config: jira_base_url\n" unless defined $config->{jira_base_url};
+	die "Missing key from config: user_name\n" unless defined $config->{user_name};
+	$config->{worklog_url} //= "/rest/tempo-timesheets/3/worklogs/";
+	$config->{search_url}  //= "/rest/api/2/search";
+
 	return $config;
 }
 
