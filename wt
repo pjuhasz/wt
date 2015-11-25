@@ -720,18 +720,16 @@ sub wtline_to_jira_json {
 
 	my $time_spent = time_spent($wtline->{start_time}, $wtline->{end_time});
 
-	my $date_started = format_date($wtline->{date}, $wtline->{start_time}); # {H=>0, M=>0, S=>0}
+	my $date_started = format_date($wtline->{date}, $wtline->{start_time});
 	
 	my $ojject = {
 		issue => {
-			#remainingEstimateSeconds => number,
 			key => $wtline->{project},
 		},
 		comment => $wtline->{comment},
 		dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
 		timeSpentSeconds => $time_spent, #seconds
 		billedSeconds => 0,
-		#projectId => 10400, # FIXME
 		worklogAttributes => [
 			 {
 			   'value' => $wtline->{activity},
@@ -878,7 +876,6 @@ sub _wt2tfe {
 sub check_overlap {
 	my $new = shift;
 	
-	#$time = timelocal( $sec, $min, $hour, $mday, $mon, $year );
 	my $new_start = _wt2tfe($new->{start_time}, $new->{date});
 	my $new_end   = _wt2tfe($new->{end_time},   $new->{date});
 	
