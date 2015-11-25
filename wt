@@ -201,11 +201,44 @@ These files are expected to be in a directory called C<.wt> under the user's
 home directory.
 
 C<wt.conf>, the configuration file should be edited by the user before
-attempting to use the program. It must be a valid JSON file. It must have
-the following mandatory keys:
+attempting to use the program. It must be a valid JSON file.
+The JSON object in it must have at least the following keys:
+
+=over
+
+=item jira_base_url
+
+The base URL of the JIRA instance to which the worklog entries are to be
+sent.
+
+=item user_name
+
+A valid JIRA user name, to be used for authentication.
+
+=back
+
+The following optional keys are also recognized:
+
+=over
+
+=item worklog_url
+
+Override the standard REST API endpoint used by JIRA to submit/query
+worklog entries
+
+=item search_url
+
+Override the standard REST API endpoint used by JIRA to search issues
+
+=item lunch_project
+
+Specify a JIRA issue for the C<wt add - lunch> feature
+
+=back
 
 
 Example:
+
 	{
 			"jira_base_url": "https://my.awesome.company.com/jira",
 			"worklog_url": "/rest/tempo-timesheets/3/worklogs/",
@@ -214,6 +247,27 @@ Example:
 			"lunch_project": "CMPS-19"
 	}
 
+C<wt.state>, the file to store persistent state between consequent runs
+of the program, is modified by most subcommands (the exceptions are C<wt>
+without arguments and C<wt report> without arguments). It is also a JSON
+file, however, it is not intended to be directly edited by the user.
+
+=head1 SAVING JIRA PASSWORD
+
+The C<commit>, C<issues>, and C<report> subcommand have to connect to 
+the JIRA instance specified in the config file. This requires authentication,
+in the form of an user name and password. The user name is also specified
+in the config file, however, the password is not.
+
+On systems that have a keyring (more precisely, any working keyring 
+implementation supported by the Passwd::Keyring::Auto module, which must
+also be installed), the password is asked only once, then saved into the
+keyring safely.
+
+On systems without keyring support the JIRA password is asked before every
+command that needs JIRA access.
+
+Storing the password in plaintext is not supported (nor is it recommended).
 
 =cut
 
@@ -642,8 +696,8 @@ sub _save_json {
 sub load_config {
 	my $config = _load_json($_[0]);
 	die "Can't load config file $_[0]\n" unless $config;
-	die "Missing key from config: jira_base_url\n" unless defined $config->{jira_base_url};
-	die "Missing key from config: user_name\n" unless defined $config->{user_name};
+	die "Missing key from config file: jira_base_url\n" unless defined $config->{jira_base_url};
+	die "Missing key from config file: user_name\n" unless defined $config->{user_name};
 	$config->{worklog_url} //= "/rest/tempo-timesheets/3/worklogs/";
 	$config->{search_url}  //= "/rest/api/2/search";
 
