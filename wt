@@ -765,10 +765,14 @@ sub list_remote {
 sub _handle_jira_error {
 	my $response = shift;
 
-	forget_pw() if $response->code() == 401;
 	warn "JIRA responded with ".$response->status_line."\n";
-	my $error = decode_json $response->decoded_content;
-	say STDERR join "\n", @{$error->{errorMessages}};
+	if ($response->code() == 401) {
+		forget_pw();
+	}
+	else {
+		my $error = decode_json $response->decoded_content;
+		say STDERR join "\n", @{$error->{errorMessages}};
+	}
 }
 
 ###############
