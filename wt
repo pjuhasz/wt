@@ -395,7 +395,7 @@ sub rm {
 		say "All local wt records deleted!";
 	}
 	else {
-		die "Error: index must be 1..".scalar @{$state->{local}}."\n" unless $idx >= 1 and $idx <= scalar @{$state->{local}};
+		die "Error: index must be 1..".scalar @{$state->{local}}."\n" unless $idx =~ /^\d+$/ and $idx >= 1 and $idx <= scalar @{$state->{local}};
 		# at this point we should have a valid index to delete
 		splice @{$state->{local}}, $idx-1, 1;
 		
