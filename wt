@@ -10,7 +10,7 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt [add] [-d DATE|-y] [-c] [-a ACTIVITY] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-a ACTIVITY] INTERVAL ISSUE COMMENT
     wt commit
     wt start [-c] [ISSUE]
     wt report [START] [END] [ISSUE]
@@ -24,7 +24,7 @@ Available subcommands:
 
 =head2 ADD
 
-    wt [add] [-d DATE|-y] [-c] [-a ACTIVITY] [HH[:MM]]-[HH[:MM]] ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-a ACTIVITY] INTERVAL ISSUE COMMENT
 
 Adds an entry to the local list of wt entries.
 
@@ -34,8 +34,12 @@ Adds an entry to the local list of wt entries.
 
 =item Interval
 
-Starting and ending time in B<HH:MM> format, separated by a dash.
-If minutes are omitted, B<HH:00> is assumed.
+Starting and ending time in B<HH:MM:SS> format, separated by a dash.
+
+	[HH[:MM[:SS]]]-[HH[:MM[:SS]]]
+
+If seconds are omitted, B<HH:MM:00> is assumed (whole minutes).
+If minutes are omitted, B<HH:00:00> is assumed (whole hours).
 
 If the starting time is omitted altogether, 
 the saved start mark is used instead, if available.
@@ -47,6 +51,14 @@ The ending time is also saved for the start mark of the next
 C<wt add> command. Thus, the interval argument may consist of 
 just a single dash in certain cases, meaning 
 "from the end of the last entry till now".
+
+Alternatively, a relative interval may be specified with a C<+> (plus sign)
+and a time specifier (B<HH:MM:SS>). Minutes and seconds may be omitted.
+
+	+HH[:MM[:SS]]
+
+Starting time is taken from the start mark. The command fails if there
+is no start mark available.
 
 =item Issue
 
@@ -575,7 +587,7 @@ sub add {
 
 	# need to check if first arg is interval spec (single dash or dash-number)
 	# before calling GetOptions
-	unless ($ARGV[0] =~ /^\-$|^\-\d/) {
+	unless ($ARGV[0] =~ /^\-$|^\-\d|^\+./) {
 		GetOptions(
 			'date=s'     => sub { $date = parse_date($_[1]); },
 			'yesterday!' => sub { $date = _yesterday(); },
@@ -584,26 +596,43 @@ sub add {
 		) or help('add');
 	}
 
-	# first argument: from-to time
+	# first argument: from-to time or relative interval
 	my $interval = shift @ARGV;
-	my ($s, $e) = split '-', $interval;
+	my ($start_time, $end_time);
 
-	# If from is not specified, try to use saved start mark.
-	# If there is no start mark either, give up.
-	my $start_time;
-	if (not $s) {
+	# relative interval
+	if (index($interval, '+') == 0) {
 		if (defined $state->{start_mark}) {
 			$start_time = $state->{start_mark};
 		}
 		else {
-			die "Error: no saved starting time available, you must specify it explicitly\n";
+			die "Error: no saved starting time available, you must specify the interval explicitly\n";
 		}
+		substr($interval, 0, 1, '');
+		my $t = parse_time($interval) or die "Invalid time spec '$interval', must be HH:MM\n";
+
+		$end_time = increment_time($start_time, time_spent({H=>0, M=>0, S=>0}, $t));
 	}
+	# absolute interval
 	else {
-		$start_time = parse_time($s);
+		my ($s, $e) = split '-', $interval;
+
+		# If from is not specified, try to use saved start mark.
+		# If there is no start mark either, give up.
+		if (not defined $s or $s eq '') {
+			if (defined $state->{start_mark}) {
+				$start_time = $state->{start_mark};
+			}
+			else {
+				die "Error: no saved starting time available, you must specify it explicitly\n";
+			}
+		}
+		else {
+			$start_time = parse_time($s) or die "Invalid time spec '$s', must be HH:MM\n";
+		}
+		# end time falls back to current time if not specified
+		$end_time = parse_time($e) or die "Invalid time spec '$e', must be HH:MM\n";
 	}
-	# end time falls back to current time if not specified
-	my $end_time = parse_time($e);
 
 	die "Error: ending time must be later than starting time\n" if time_spent($start_time, $end_time, noabs => 1) <= 0;
 
@@ -636,7 +665,7 @@ sub add {
 	my $comment = "@ARGV";
 	# special hack: no comment is required for lunch
 	$comment = "lunch" if $comment eq '' and $project_str eq "lunch";
-	die "Error: Comment is required\n" unless defined $comment;
+	die "Error: Comment is required\n" if $comment eq '';
 
 	# activity may have been set by option
 	# special hack: no comment is required for lunch
