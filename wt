@@ -147,6 +147,7 @@ Queries worklog entries from JIRA.
 If this subcommand is called with two date arguments, worklog entries between the two date
 are queried from JIRA. Dates must be specified as YYYY-MM-DD.
 If the year or month is omitted, the current year or month is substituted.
+C<today> can be used to mean the current date.
 
 The end date may be omitted altogether, in which case the current date is assumed.
 
@@ -463,6 +464,7 @@ sub query {
 	my $start_date_str = shift @ARGV;
 	
 	if (defined $start_date_str) {
+		$start_date_str = undef if $start_date_str eq 'today';
 		my $start_date = parse_date($start_date_str);
 		help('report') unless defined $start_date;
 
