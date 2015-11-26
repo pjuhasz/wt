@@ -54,8 +54,11 @@ just a single dash in certain cases, meaning
 
 Alternatively, a relative interval may be specified with a C<+> (plus sign)
 and a time specifier (B<HH:MM:SS>). Minutes and seconds may be omitted.
+Fractional hours may also be specified. A C<m> suffix means minutes.
 
 	+HH[:MM[:SS]]
+	+HH.H
+	+MMm
 
 Starting time is taken from the start mark. The command fails if there
 is no start mark available.
@@ -587,7 +590,7 @@ sub add {
 
 	# need to check if first arg is interval spec (single dash or dash-number)
 	# before calling GetOptions
-	unless ($ARGV[0] =~ /^\-$|^\-\d|^\+./) {
+	unless ($ARGV[0] =~ /^\-$|^\-\d|^\+/) {
 		GetOptions(
 			'date=s'     => sub { $date = parse_date($_[1]); },
 			'yesterday!' => sub { $date = _yesterday(); },
@@ -608,8 +611,7 @@ sub add {
 		else {
 			die "Error: no saved starting time available, you must specify the interval explicitly\n";
 		}
-		substr($interval, 0, 1, '');
-		my $t = parse_time($interval) or die "Invalid time spec '$interval', must be HH:MM\n";
+		my $t = parse_time($interval) or die "Invalid interval spec '$interval', must be +HH:MM or +HH or +MMm\n";
 
 		$end_time = increment_time($start_time, time_spent({H=>0, M=>0, S=>0}, $t));
 	}
@@ -950,14 +952,32 @@ sub parse_date {
 
 # if time is defined, try to parse it from HH-MM-SS or HH-MM or HH string, otherwise get current time
 # if minutes or seconds are missing, they are assumed to be zero (whole hour/minute)
+# +HH:MM or +HH.H or +MMm relative intervals are also parsed here
 sub parse_time {
 	my $dstr = shift;
-	
+
 	my @lt = localtime(time);
 	my $time = {H => $lt[2], M => $lt[1], S => $lt[0]};
-	
-	if (defined $dstr and $dstr) {
-		if ($dstr =~ /^\d\d?$/) {
+
+	my $is_interval = 0;
+	if (defined $dstr and $dstr ne '') {
+		if (index($dstr, '+') == 0) {
+			substr($dstr, 0, 1, '');
+			$is_interval = 1;
+		}
+
+		if ($is_interval and $dstr =~ /^(\d\d?)\.(\d+)$/) {
+			$time->{H} = 0+$1;
+			$time->{M} = int($2 * 6 + 0.5); # * 60 / 10
+			$time->{S} = 0;
+		}
+		elsif ($is_interval and $dstr =~ /^(\d+)m$/) {
+			my $m = 0+$1;
+			$time->{H} = int($m / 60);
+			$time->{M} = $m % 60;
+			$time->{S} = 0;
+		}
+		elsif ($dstr =~ /^\d\d?$/) {
 			$time->{H} = 0+$dstr;
 			$time->{M} = $time->{S} = 0;
 		}
