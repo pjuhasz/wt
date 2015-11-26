@@ -317,6 +317,7 @@ my $config_fn = File::Spec->catfile($ENV{HOME}, ".wt", "wt.conf");
 my $state_fn  = File::Spec->catfile($ENV{HOME}, ".wt", "wt.state");
 my $config = load_config($config_fn);
 my $state  = load_state($state_fn);
+my $ret = 0;
 
 @ARGV = map { decode(locale => $_, 1) } @ARGV;
 
@@ -336,6 +337,7 @@ for ($action) {
 	default                { unshift @ARGV, $action; add(); }
 }
 
+exit($ret);
 
 ###############
 
@@ -368,6 +370,7 @@ sub list_local {
 	}
 	else {
 		say "No local wt records.";
+		$ret = 1;
 	}
 
 	if (defined $state->{start_mark}) {
@@ -487,7 +490,7 @@ sub query {
 
 			update_saved_issue_summaries($state->{remote}, from => 'remote');
 
-			list_remote("No worklog records in the specified date range.");
+			list_remote(on_error => "No worklog records in the specified date range.");
 
 			save_state($state_fn, $state);
 		}
@@ -498,7 +501,7 @@ sub query {
 	}
 	else {
 		# print last saved query, don't actually ask jira
-		list_remote("There is no saved query.");
+		list_remote(on_error => "There is no saved query.");
 	} 
 
 }
@@ -858,7 +861,7 @@ sub summary {
 }
 
 sub list_remote {
-	my $msg = shift;
+	my %args = @_;
 	my $i = 1;
 	my @remote = @{$state->{remote}};
 	for my $csira (@remote) {
@@ -869,7 +872,8 @@ sub list_remote {
 		say summary([ map {jira_json_to_wtline($_)} @remote ]);
 	}
 	else {
-		say $msg;
+		say $args{on_error};
+		$ret = 1;
 	}
 }
 
@@ -884,6 +888,7 @@ sub _handle_jira_error {
 		my $error = decode_json $response->decoded_content;
 		say STDERR join "\n", @{$error->{errorMessages}};
 	}
+	$ret = 1;
 }
 
 ###############
