@@ -327,10 +327,10 @@ binmode STDOUT, ":encoding(UTF-8)";
 
 for ($action) {
 	when (undef)           { list_local(); }
-	when ([qw/start s/])   { set_mark();   }
-	when ([qw/commit ci/]) { commit();     }
 	when ([qw/issues :/])  { get_issues(); }
-	when ("report")        { query();      }
+	when ([qw/start  s/ ]) { set_mark();   }
+	when ([qw/commit ci/]) { commit();     }
+	when ([qw/report r/])  { query();      }
 	when ([qw/help h/])    { help();       }
 	when ([qw/add a/])     { add();        }
 	when ("rm")            { rm();         }
