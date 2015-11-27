@@ -621,7 +621,7 @@ sub add {
 		else {
 			die "Error: no saved starting time available, you must specify the interval explicitly\n";
 		}
-		my $t = parse_time($interval) or die "Invalid interval spec '$interval', must be +HH:MM or +HH or +MMm\n";
+		my $t = parse_time($interval);
 
 		$end_time = increment_time($start_time, time_spent({H=>0, M=>0, S=>0}, $t));
 	}
@@ -640,10 +640,10 @@ sub add {
 			}
 		}
 		else {
-			$start_time = parse_time($s) or die "Invalid time spec '$s', must be HH:MM\n";
+			$start_time = parse_time($s);
 		}
 		# end time falls back to current time if not specified
-		$end_time = parse_time($e) or die "Invalid time spec '$e', must be HH:MM\n";
+		$end_time = parse_time($e);
 	}
 
 	die "Error: ending time must be later than starting time\n" if time_spent($start_time, $end_time, noabs => 1) <= 0;
@@ -958,6 +958,10 @@ sub parse_date {
 		else {
 			$date = undef;
 		}
+
+		unless (defined $date) {
+			die "Invalid date specifier, must be one of YYYY-MM-DD or MM-DD or DD\n";
+		}
 	}
 	return $date;
 }
@@ -989,22 +993,30 @@ sub parse_time {
 			$time->{M} = $m % 60;
 			$time->{S} = 0;
 		}
-		elsif ($dstr =~ /^\d\d?$/) {
+		elsif ($dstr =~ /^(?:[01]?\d|2[0-3])$/) {
 			$time->{H} = 0+$dstr;
 			$time->{M} = $time->{S} = 0;
 		}
-		elsif ($dstr =~ /^(\d\d?):(\d\d?)$/) {
+		elsif ($dstr =~ /^([01]?\d|2[0-3]):([0-5]?\d)$/) {
 			$time->{H} = 0+$1;
 			$time->{M} = 0+$2;
 			$time->{S} = 0;
 		}
-		elsif ($dstr =~ /^(\d\d?):(\d\d?):(\d\d?)/) { # drop fractional seconds
+		elsif ($dstr =~ /^([01]?\d|2[0-3]):([0-5]?\d):([0-5]?\d)/) { # drop fractional seconds
 			$time->{H} = 0+$1;
 			$time->{M} = 0+$2;
 			$time->{S} = 0+$3;
 		}
 		else {
 			$time = undef;
+		}
+		unless (defined $time) {
+			if ($is_interval) {
+				die "Invalid interval spec '$dstr', must be one of +HH:MM:SS, +HH:MM, +HH, +MMm\n";
+			}
+			else {
+				die "Invalid time spec '$dstr', must be one of HH:MM:SS, HH:MM, HH\n";
+			}
 		}
 	}
 	return $time;
