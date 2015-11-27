@@ -374,21 +374,7 @@ sub list_local {
 		$ret = 1;
 	}
 
-	if (defined $state->{start_mark}) {
-		my $interval = -1 * time_spent(parse_time(undef), $state->{start_mark}, noabs => 1);
-		if ($interval < 0) {
-			say "End of last local wt entry is in the future";
-		}
-		else {
-			my ($h, $m, $s);
-			$h = int($interval / 3600); $interval -= $h * 3600;
-			$m = int($interval /   60); $interval -= $m *   60;
-			$s = int($interval);
-			$interval = ($h || '') . ($h ? ':' : '') . pad($m)  . ':' . pad($s);
-			my $on_project =  defined $state->{current_project} ? "on issue $state->{current_project}" : "";
-			say "Unlogged work: $interval $on_project";
-		}
-	}
+	print_unlogged();
 }
 
 sub rm {
@@ -432,6 +418,14 @@ sub set_mark {
 	elsif ($change) {
 		$project_str //= "";
 		die "Error: project name required for wt start --change\n";
+	}
+
+	if ($change) {
+		print_unlogged();
+	}
+	else {
+		my $on_project =  defined $state->{current_project} ? "on issue $state->{current_project}" : "";
+		say "Started work $on_project";
 	}
 
 	save_state($state_fn, $state); 
@@ -881,6 +875,24 @@ sub list_remote {
 	else {
 		say $args{on_error};
 		$ret = 1;
+	}
+}
+
+sub print_unlogged {
+	if (defined $state->{start_mark}) {
+		my $interval = -1 * time_spent(parse_time(undef), $state->{start_mark}, noabs => 1);
+		if ($interval < 0) {
+			say "End of last local wt entry is in the future";
+		}
+		else {
+			my ($h, $m, $s);
+			$h = int($interval / 3600); $interval -= $h * 3600;
+			$m = int($interval /   60); $interval -= $m *   60;
+			$s = int($interval);
+			$interval = ($h || '') . ($h ? ':' : '') . pad($m)  . ':' . pad($s);
+			my $on_project =  defined $state->{current_project} ? "on issue $state->{current_project}" : "";
+			say "Unlogged work: $interval $on_project";
+		}
 	}
 }
 
