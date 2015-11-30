@@ -16,6 +16,7 @@ Available subcommands:
     wt report [START] [END] [ISSUE]
     wt rm INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
+    wt alias [ALIAS [COMMAND ...]]
     wt
     wt help [SUBCOMMAND]
 
@@ -200,6 +201,22 @@ Alternatively, if called as "wt rm all", all local entries are deleted.
 (wt command without arguments)
 List local wt entries.
 
+=head2 ALIAS
+
+    wt alias [ALIAS [COMMAND ...]]
+
+This subcommand can be used to assign shortcuts to frequently used commands.
+
+If called as e.g. C<wt alias foo add - ISSUE-1 foo>, then from that point
+C<wt foo> will be understood as an alias for C<wt add - ISSUE-1 foo>.
+
+Aliases are not expanded recursively, so only the default subcommands are
+allowed as the aliased command. However, any string is accepted as an alias,
+so even the default subcommands can be redefined.
+
+If called with just an alias but without a definition, that alias is deleted.
+
+If called without any parameters, the list of all defined aliases is printed.
 
 =head2 HELP
 
@@ -305,6 +322,8 @@ use Getopt::Long;
 use Encode::Locale;
 use Encode;
 
+# keyring support is optional, will be enabled only
+# if the module is installed
 our $have_keyring;
 BEGIN {
 	$have_keyring = eval {
@@ -314,21 +333,34 @@ BEGIN {
 	};
 }
 
+# load config and state
 my $config_fn = File::Spec->catfile($ENV{HOME}, ".wt", "wt.conf");
 my $state_fn  = File::Spec->catfile($ENV{HOME}, ".wt", "wt.state");
 my $config = load_config($config_fn);
 my $state  = load_state($state_fn);
 my $ret = 0;
 
-@ARGV = map { decode(locale => $_, 1) } @ARGV;
-
-my $action = shift @ARGV;
-
+# take care of encoding for output...
 binmode STDOUT, ":encoding(UTF-8)";
 
+# and for input as well
+@ARGV = map { decode(locale => $_, 1) } @ARGV;
+
+# get subcommand
+my $action = shift @ARGV;
+
+# take aliases into account
+if (defined $action and exists $state->{aliases}{$action}) {
+	my @cmds = @{$state->{aliases}{$action}};
+	$action = shift @cmds;
+	unshift @ARGV, @cmds;
+}
+
+# jump table for subcommands
 for ($action) {
 	when (undef)           { list_local(); }
 	when ([qw/issues :/])  { get_issues(); }
+	when ([qw/alias al/ ]) { set_alias();  }
 	when ([qw/start  s/ ]) { set_mark();   }
 	when ([qw/commit ci/]) { commit();     }
 	when ([qw/report r/])  { query();      }
@@ -348,9 +380,10 @@ sub help {
 	for ($action) {
 		when (undef)           { pod2usage({-verbose => 99, -sections => "SYNOPSIS|USAGE"});     }
 		when ([qw/start s/])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/START"});  }
+		when ([qw/alias al/ ]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ALIAS"});  }
 		when ([qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"}); }
 		when ([qw/issues :/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ISSUES"}); }
-		when ("report")        { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}); }
+		when ([qw/report r/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}); }
 		when ([qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
 		when ([qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
 		when ("rm")            { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/RM"});     }
@@ -375,6 +408,31 @@ sub list_local {
 	}
 
 	print_unlogged();
+}
+
+sub set_alias {
+	my $alias = shift @ARGV;
+
+	if (defined $alias) {
+		if (@ARGV) {
+			$state->{aliases}{$alias} = [@ARGV];
+		}
+		else {
+			delete $state->{aliases}{$alias};
+		}
+		save_state($state_fn, $state);
+	}
+	else {
+		if (keys %{$state->{aliases}}) {
+			while (my ($al, $def) = each %{$state->{aliases}}) {
+				say $al, ":\t@$def";
+			}
+		}
+		else {
+			say "No defined aliases.";
+			$ret = 1;
+		}
+	}
 }
 
 sub rm {
