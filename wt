@@ -10,7 +10,7 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt [add] [-d DATE|-y] [-c] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
     wt commit
     wt start [-c] [ISSUE]
     wt report [START] [END] [ISSUE]
@@ -25,7 +25,7 @@ Available subcommands:
 
 =head2 ADD
 
-    wt [add] [-d DATE|-y] [-c] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
 
 Adds an entry to the local list of wt entries.
 
@@ -102,6 +102,12 @@ By default, the C<add> subcommand only adds the entry to the local list,
 which must be committed with C<wt commit> separately.
 
 This switch causes the entry to be committed immediately.
+
+=item C<-f> Force
+
+By default, a new entry that overlaps with any previous (local) entry is
+rejected. This switch can be used to disable this check
+(JIRA doesn't seem to care anyway).
 
 =back
 
@@ -658,6 +664,7 @@ sub add {
 
 	# defaults
 	my $autocommit = 0;
+	my $no_overlap_check = 0;
 	my $activity = undef;
 
 	# need to check if first arg is interval spec (single dash or dash-number)
@@ -668,6 +675,7 @@ sub add {
 			'yesterday!' => sub { $date = _yesterday(); },
 			'commit!'    => \$autocommit,
 			'activity=s' => \$activity,
+			'force!'     => \$no_overlap_check,
 		) or help('add');
 	}
 
@@ -756,7 +764,8 @@ sub add {
 		activity   => $activity,
 	};
 
-	if (my $overlap_idx = check_overlap($wtline)) {
+	if (not ($no_overlap_check or $config->{no_overlap_check})
+	and my $overlap_idx = check_overlap($wtline)) {
 		die "Error: input overlaps with existing entry:\n" .
 			 print_wtline($state->{local}[$overlap_idx-1], $overlap_idx) .
 			 print_wtline($wtline, undef);
