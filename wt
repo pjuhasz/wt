@@ -267,6 +267,15 @@ Override the standard REST API endpoint used by JIRA to search issues
 
 Specify a JIRA issue for the C<wt add - lunch> feature
 
+=item autocommit
+
+Turns on autocommit mode: C<commit> is called after each invocation of 
+<wt add>. Boolean key.
+
+=item no_overlap_check
+
+Disables checking for overlapping time intervals in C<wt add>. Boolean key.
+
 =back
 
 
@@ -277,7 +286,8 @@ Example:
 			"worklog_url": "/rest/tempo-timesheets/3/worklogs/",
 			"search_url": "/rest/api/2/search",
 			"user_name": "homer.simpson",
-			"lunch_project": "CMPS-19"
+			"lunch_project": "CMPS-19",
+			"autocommit": true
 	}
 
 C<wt.state>, the file to store persistent state between consequent runs
@@ -760,7 +770,7 @@ sub add {
 	save_state($state_fn, $state);
 	list_local();
 
-	if ($autocommit) {
+	if ($autocommit or $config->{autocommit}) {
 		commit();
 	}
 }
