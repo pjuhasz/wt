@@ -383,7 +383,8 @@ for ($action) {
 	when ([qw/help h/])    { help();       }
 	when ([qw/add a/])     { add();        }
 	when ("rm")            { rm();         }
-	default                { unshift @ARGV, $action; add(); }
+	when (/^[\-\d\+]/)     { unshift @ARGV, $action; add(); }
+	default                { help();       }
 }
 
 exit($ret);
