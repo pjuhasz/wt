@@ -145,6 +145,9 @@ Saves a timestamp with the current time. In effect, this command means
 "I'm starting work now". An optional project (issue) name can be specified,
 it will be saved as the current project.
 
+The C<--change> or C<-c> option only changes the current issue, but does not
+reset the timestamp.
+
 =head2 REPORT
 
     wt report [START] [END] [PROJECT]
