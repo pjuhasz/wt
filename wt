@@ -472,7 +472,7 @@ sub rm {
 		# update start mark to end of last entry
 		if (@{$state->{local}}) {
 			$state->{current_project} = $state->{local}[-1]{project};
-			$state->{start_mark} = $state->{local}[-1]{end_time};
+			$state->{start_mark} = { t => $state->{local}[-1]{end_time}, d => $state->{local}[-1]{date} };
 		}
 	}
 	save_state($state_fn, $state); 
@@ -486,7 +486,7 @@ sub set_mark {
 	) or help('start');
 
 	unless ($change) {
-		$state->{start_mark} = parse_time(undef);
+		$state->{start_mark} = { t => parse_time(undef), d => parse_date(undef) };
 	}
 
 	my $project_str = shift @ARGV;
@@ -690,7 +690,7 @@ sub add {
 	# relative interval
 	if (index($interval, '+') == 0) {
 		if (defined $state->{start_mark}) {
-			$start_time = $state->{start_mark};
+			$start_time = $state->{start_mark}{t};
 		}
 		else {
 			die "Error: no saved starting time available, you must specify the interval explicitly\n";
@@ -707,7 +707,7 @@ sub add {
 		# If there is no start mark either, give up.
 		if (not defined $s or $s eq '') {
 			if (defined $state->{start_mark}) {
-				$start_time = $state->{start_mark};
+				$start_time = $state->{start_mark}{t};
 			}
 			else {
 				die "Error: no saved starting time available, you must specify it explicitly\n";
@@ -778,7 +778,7 @@ sub add {
 	push @{$state->{local}}, $wtline;
 	
 	$state->{current_project} = $project;
-	$state->{start_mark} = $end_time;
+	$state->{start_mark} = { t => $end_time, d => $date };
 
 	save_state($state_fn, $state);
 	list_local();
@@ -961,18 +961,25 @@ sub list_remote {
 
 sub print_unlogged {
 	if (defined $state->{start_mark}) {
-		my $interval = -1 * time_spent(parse_time(undef), $state->{start_mark}, noabs => 1);
-		if ($interval < 0) {
-			say "End of last local wt entry is in the future";
-		}
-		else {
-			my ($h, $m, $s);
-			$h = int($interval / 3600); $interval -= $h * 3600;
-			$m = int($interval /   60); $interval -= $m *   60;
-			$s = int($interval);
-			$interval = ($h || '') . ($h ? ':' : '') . pad($m)  . ':' . pad($s);
-			my $on_project =  defined $state->{current_project} ? "on issue $state->{current_project}" : "";
-			say "Unlogged work: $interval $on_project";
+		my $today = parse_date(undef);
+		my $saved = $state->{start_mark}{d};
+		if ($today->{Y} == $saved->{Y} and
+			$today->{M} == $saved->{M} and
+			$today->{D} == $saved->{D} ) {
+
+			my $interval = -1 * time_spent(parse_time(undef), $state->{start_mark}{t}, noabs => 1);
+			if ($interval < 0) {
+				say "End of last local wt entry is in the future";
+			}
+			else {
+				my ($h, $m, $s);
+				$h = int($interval / 3600); $interval -= $h * 3600;
+				$m = int($interval /   60); $interval -= $m *   60;
+				$s = int($interval);
+				$interval = join ':', $h, pad($m), pad($s);
+				my $on_project =  defined $state->{current_project} ? "on issue $state->{current_project}" : "";
+				say "Unlogged work: $interval $on_project";
+			}
 		}
 	}
 }
