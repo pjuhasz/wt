@@ -2,11 +2,11 @@
 
 =pod
 
-=head1 SYNOPSIS
+=head1 NAME
 
 wt - command line work log client
 
-=head1 USAGE
+=head1 SYNOPSIS
 
 Available subcommands:
 
@@ -20,6 +20,15 @@ Available subcommands:
     wt
     wt help [SUBCOMMAND]
 
+
+=head1 DESCRIPTION
+
+B<wt> can be used to track, log, and query working time with a convenient
+command line interface.
+Working time entries (discrete intervals with a starting and ending time)
+are first collected in a local database, then committed to a JIRA instance.
+Work log entries previously committed, as well as JIRA issue names and
+descriptions, can be queried.
 
 =head1 SUBCOMMANDS
 
@@ -234,15 +243,56 @@ If called without any parameters, the list of all defined aliases is printed.
 Prints available subcommands if called without arguments,
 or detailed help for a subcommand.
 
+=head1 EXAMPLES
+
+A typical session (working day) begins with issuing the
+
+	wt start
+
+command, optionally with a JIRA issue identifier, to signify that you're
+starting work for the day.
+
+The simplest way to log time is right away when you're finished with a work unit
+(bugfix, feature etc.):
+
+	wt add - - implemented foo in module bar
+
+This command means in essence I<I've worked on the current issue, from the
+end of the last entry till now>.
+
+Work can be continued to be logged in this way until the end of the day,
+when you finally commit the day's work to JIRA:
+
+	wt commit
+
+This is not mandatory, however, you can also opt to record your work log
+entries in one go at the end of the day, specifying explicit intervals
+and issue names:
+
+	wt add 9-12:30 BAR-42 implemented foo in module bar
+
+or even
+
+	wt +50m BAR-42 foo
+
+if you don't care about exact starting and ending times, 
+just the amount of time.
+
+You can use
+
+	wt : BAR
+
+to search for issues in project BAR.
+
 =head1 FILES
 
-This program relies on two files called C<wt.conf> and C<wt.state>,
+This program relies on two files called F<wt.conf> and F<wt.state>,
 used to store user preferences and persistent state, respectively.
 
-These files are expected to be in a directory called C<.wt> under the user's
+These files are expected to be in a directory called F<.wt> under the user's
 home directory.
 
-C<wt.conf>, the configuration file should be edited by the user before
+F<wt.conf>, the configuration file should be edited by the user before
 attempting to use the program. It must be a valid JSON file.
 The JSON object in it must have at least the following keys:
 
@@ -299,7 +349,7 @@ Example:
 			"autocommit": true
 	}
 
-C<wt.state>, the file to store persistent state between consequent runs
+F<wt.state>, the file to store persistent state between consequent runs
 of the program, is modified by most subcommands (the exceptions are C<wt>
 without arguments and C<wt report> without arguments). It is also a JSON
 file, however, it is not intended to be directly edited by the user.
@@ -398,7 +448,7 @@ sub help {
 	my $action = shift // shift @ARGV // "";
 
 	for ($action) {
-		when (undef)           { pod2usage({-verbose => 99, -sections => "SYNOPSIS|USAGE"});     }
+		when (undef)           { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
 		when ([qw/start s/])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/START"});  }
 		when ([qw/alias al/ ]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ALIAS"});  }
 		when ([qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"}); }
@@ -407,7 +457,7 @@ sub help {
 		when ([qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
 		when ([qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
 		when ("rm")            { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/RM"});     }
-		default                { pod2usage({-verbose => 99, -sections => "SYNOPSIS|USAGE"});     }
+		default                { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
 	}
 
 	exit;
