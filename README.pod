@@ -361,7 +361,7 @@ in the config file, however, the password is not.
 
 On systems that have a keyring (more precisely, any working keyring 
 implementation supported by the Passwd::Keyring::Auto module, which must
-also be installed), the password is asked only once, then saved into the
+also be installed if keyring support is desired), the password is asked only once, then saved into the
 keyring safely.
 
 On systems without keyring support the JIRA password is asked before every
