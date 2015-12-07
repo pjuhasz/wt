@@ -1,4 +1,5 @@
 SCRIPTNAME = wt
+README = README.pod
 PREFIX = /usr/local
 BINDIR = $(PREFIX)/bin
 MANDIR = $(PREFIX)/share/man/man1
@@ -7,8 +8,8 @@ MANDIR = $(PREFIX)/share/man/man1
 
 all: man-doc
 
-man-doc: $(SCRIPTNAME)
-	pod2man $(SCRIPTNAME) | gzip > $(SCRIPTNAME).1.gz
+man-doc: $(README)
+	pod2man $(README) | gzip > $(SCRIPTNAME).1.gz
 
 install: man-doc
 	install $(SCRIPTNAME) $(BINDIR)
