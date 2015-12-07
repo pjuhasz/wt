@@ -978,8 +978,13 @@ sub print_unlogged {
 				$m = int($interval /   60); $interval -= $m *   60;
 				$s = int($interval);
 				$interval = join ':', $h, pad($m), pad($s);
-				my $on_project =  defined $state->{current_project} ? "on issue $state->{current_project}" : "";
-				say "Unlogged work: $interval $on_project";
+				my $on_project = defined $state->{current_project} ?
+									" on issue $state->{current_project}" :
+									"";
+				my $project_summary = defined $state->{current_project} && exists $state->{issues}->{ $state->{current_project} } ?
+									"\t".$state->{issues}->{ $state->{current_project} } :
+									"";
+				say "Unlogged work: ", $interval, $on_project, $project_summary;
 			}
 		}
 	}
