@@ -491,7 +491,7 @@ sub set_mark {
 
 	my $project_str = shift @ARGV;
 	if (defined $project_str) {
-		$state->{current_project} = $project_str;
+		$state->{current_project} = uc $project_str;
 	}
 	elsif ($change) {
 		$project_str //= "";
@@ -745,6 +745,7 @@ sub add {
 	else {
 		die "Error: project name is mandatory\n";
 	}
+	$project = uc $project;
 
 	# third argument: comment
 	# rest of @ARGV is concatenated so that quotes are not needed
@@ -840,7 +841,7 @@ sub wtline_to_jira_json {
 	
 	my $ojject = {
 		issue => {
-			key => $wtline->{project},
+			key => uc $wtline->{project},
 		},
 		comment => $wtline->{comment},
 		dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
