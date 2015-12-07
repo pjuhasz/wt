@@ -1,5 +1,378 @@
 #!/usr/bin/perl
 
+=pod
+
+=head1 NAME
+
+wt - command line work log client
+
+=head1 SYNOPSIS
+
+Available subcommands:
+
+    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+    wt commit
+    wt start [-c] [ISSUE]
+    wt report [START] [END] [ISSUE]
+    wt rm INDEX|all
+    wt issues [-a] [-s|-j] [-m NUM] STRING
+    wt alias [ALIAS [COMMAND ...]]
+    wt
+    wt help [SUBCOMMAND]
+
+
+=head1 DESCRIPTION
+
+B<wt> can be used to track, log, and query working time with a convenient
+command line interface.
+Working time entries (discrete intervals with a starting and ending time)
+are first collected in a local database, then committed to a JIRA instance.
+Work log entries previously committed, as well as JIRA issue names and
+descriptions, can be queried.
+
+=head1 SUBCOMMANDS
+
+=head2 ADD
+
+    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+
+Adds an entry to the local list of wt entries.
+
+=head3 There are three mandatory arguments:
+
+=over
+
+=item Interval
+
+Starting and ending time in B<HH:MM:SS> format, separated by a dash.
+
+	[HH[:MM[:SS]]]-[HH[:MM[:SS]]]
+
+If seconds are omitted, B<HH:MM:00> is assumed (whole minutes).
+If minutes are omitted, B<HH:00:00> is assumed (whole hours).
+
+If the starting time is omitted altogether, 
+the saved start mark is used instead, if available.
+It is an error to omit the start if no start mark is available.
+
+If the ending time is omitted altogether, the current time is assumed.
+
+The ending time is also saved for the start mark of the next
+C<wt add> command. Thus, the interval argument may consist of 
+just a single dash in certain cases, meaning 
+"from the end of the last entry till now".
+
+Alternatively, a relative interval may be specified with a C<+> (plus sign)
+and a time specifier (B<HH:MM:SS>). Minutes and seconds may be omitted.
+Fractional hours may also be specified. A C<m> suffix means minutes.
+
+	+HH[:MM[:SS]]
+	+HH.H
+	+MMm
+
+Starting time is taken from the start mark. The command fails if there
+is no start mark available.
+
+=item Issue
+
+Project or issue identifier, in B<PROJECT-NUMBER> format.
+A single dash means to use the current project, if one is available.
+
+=item Comment
+
+Arbitrary text (can contain spaces etc. if quoted) to describe
+the task/bugfix etc.
+
+=back
+
+=head3 Options to the B<add> subcommand
+
+=over
+
+=item C<-a> Activity type
+
+JIRA requires an activity type for each worklog entry. This can be
+overridden with the C<-a> or C<--activity> switch.
+The default activity type is "Dev".
+
+=item C<-d> Set date
+
+By default, the date for the entry is the current date. This can be overridden
+by the C<-d> or C<--date> switch, which requires a date string in YYYY-MM-DD format. 
+If the year or month is omitted, the current year or month is substituted.
+
+=item C<-y> Yesterday
+
+The C<-y> or C<--yesterday> switch sets the date to yesterday.
+
+=item C<-c> Autocommit
+
+By default, the C<add> subcommand only adds the entry to the local list, 
+which must be committed with C<wt commit> separately.
+
+This switch causes the entry to be committed immediately.
+
+=item C<-f> Force
+
+By default, a new entry that overlaps with any previous (local) entry is
+rejected. This switch can be used to disable this check
+(JIRA doesn't seem to care anyway).
+
+=back
+
+=head3 Lunch and breaks
+
+Specifying "lunch" as the issue name will cause the following:
+
+=over
+
+=item The project name will be substituted from the "lunch-project" key in 
+wt.conf. If that key doesn't exist, the program terminates with an error.
+
+=item The comment becomes optional, if omitted, "lunch" will be substituted.
+
+=item The activity type will be set to "Break" unless explicitly overridden.
+
+=back
+
+The C<add> keyword may be omitted.
+
+=head2 COMMIT
+
+    wt commit
+    wt ci
+
+Attempt to commit local wt entries to JIRA.
+Successfully committed entries are deleted from the list.
+
+=head2 START
+
+	wt start [-c|--change] [ISSUE]
+	wt s ...
+
+Saves a timestamp with the current time. In effect, this command means
+"I'm starting work now". An optional project (issue) name can be specified,
+it will be saved as the current project.
+
+The C<--change> or C<-c> option only changes the current issue, but does not
+reset the timestamp.
+
+=head2 REPORT
+
+    wt report [START] [END] [PROJECT]
+    wt r ...
+
+Queries worklog entries from JIRA.
+If this subcommand is called with two date arguments, worklog entries between the two date
+are queried from JIRA. Dates must be specified as YYYY-MM-DD.
+If the year or month is omitted, the current year or month is substituted.
+C<today> can be used to mean the current date.
+
+The end date may be omitted altogether, in which case the current date is assumed.
+
+An optional third argument can be used to filter for project name.
+
+If called without dates, prints the results of the last query
+(but doesn't start a new query).
+
+=head2 ISSUES
+
+    wt issues [-a] [-s|-j] [-m NUM] [STRING]
+    wt : ...
+
+Query issues matching STRING from JIRA and print the resulting list.
+
+Each entry contains the issue number, status, assignee and summary.
+
+The list is sorted by date, latest is on the bottom.
+
+If STRING looks like a JIRA issue (e.g. CG-54), it is assumed to be an issue number,
+and the resulting list will contain that one issue (at most).
+Otherwise, it is assumed to be a project number, and all issues under that project
+are returned (if the project exists).
+
+The -s or --summary switch can be used to search in the issue summaries instead.
+In this case all issues are reported whose summaries match STRING.
+
+Alternatively, the -j or --jql switch can be used to pass a raw JQL query string to JIRA.
+The query string is not validated, just passed as is.
+
+The -a or --assigned switch can be used to restrict the search to those issues 
+that are assigned to the current user.
+
+The -m or --max switch can be used to override the maximum number of issues reported, 
+by default 100.
+
+=head2 RM
+
+    wt rm INDEX|all
+
+Delete one local wt entry. The index number of the entry to be deleted is
+the same as reported by "wt" without arguments.
+
+Alternatively, if called as "wt rm all", all local entries are deleted.
+
+=head2 LIST
+
+    wt
+
+(wt command without arguments)
+List local wt entries.
+
+=head2 ALIAS
+
+    wt alias [ALIAS [COMMAND ...]]
+
+This subcommand can be used to assign shortcuts to frequently used commands.
+
+If called as e.g. C<wt alias foo add - ISSUE-1 foo>, then from that point
+C<wt foo> will be understood as an alias for C<wt add - ISSUE-1 foo>.
+
+Aliases are not expanded recursively, so only the default subcommands are
+allowed as the aliased command. However, any string is accepted as an alias,
+so even the default subcommands can be redefined.
+
+If called with just an alias but without a definition, that alias is deleted.
+
+If called without any parameters, the list of all defined aliases is printed.
+
+=head2 HELP
+
+    wt help [SUBCOMMAND]
+
+Prints available subcommands if called without arguments,
+or detailed help for a subcommand.
+
+=head1 EXAMPLES
+
+A typical session (working day) begins with issuing the
+
+	wt start
+
+command, optionally with a JIRA issue identifier, to signify that you're
+starting work for the day.
+
+The simplest way to log time is right away when you're finished with a work unit
+(bugfix, feature etc.):
+
+	wt add - - implemented foo in module bar
+
+This command means in essence I<I've worked on the current issue, from the
+end of the last entry till now>.
+
+Work can be continued to be logged in this way until the end of the day,
+when you finally commit the day's work to JIRA:
+
+	wt commit
+
+This is not mandatory, however, you can also opt to record your work log
+entries in one go at the end of the day, specifying explicit intervals
+and issue names:
+
+	wt add 9-12:30 BAR-42 implemented foo in module bar
+
+or even
+
+	wt +50m BAR-42 foo
+
+if you don't care about exact starting and ending times, 
+just the amount of time.
+
+You can use
+
+	wt : BAR
+
+to search for issues in project BAR.
+
+=head1 FILES
+
+This program relies on two files called F<wt.conf> and F<wt.state>,
+used to store user preferences and persistent state, respectively.
+
+These files are expected to be in a directory called F<.wt> under the user's
+home directory.
+
+F<wt.conf>, the configuration file should be edited by the user before
+attempting to use the program. It must be a valid JSON file.
+The JSON object in it must have at least the following keys:
+
+=over
+
+=item jira_base_url
+
+The base URL of the JIRA instance to which the worklog entries are to be
+sent.
+
+=item user_name
+
+A valid JIRA user name, to be used for authentication.
+
+=back
+
+The following optional keys are also recognized:
+
+=over
+
+=item worklog_url
+
+Override the standard REST API endpoint used by JIRA to submit/query
+worklog entries
+
+=item search_url
+
+Override the standard REST API endpoint used by JIRA to search issues
+
+=item lunch_project
+
+Specify a JIRA issue for the C<wt add - lunch> feature
+
+=item autocommit
+
+Turns on autocommit mode: C<commit> is called after each invocation of 
+<wt add>. Boolean key.
+
+=item no_overlap_check
+
+Disables checking for overlapping time intervals in C<wt add>. Boolean key.
+
+=back
+
+
+Example:
+
+	{
+			"jira_base_url": "https://my.awesome.company.com/jira",
+			"worklog_url": "/rest/tempo-timesheets/3/worklogs/",
+			"search_url": "/rest/api/2/search",
+			"user_name": "homer.simpson",
+			"lunch_project": "CMPS-19",
+			"autocommit": true
+	}
+
+F<wt.state>, the file to store persistent state between consequent runs
+of the program, is modified by most subcommands (the exceptions are C<wt>
+without arguments and C<wt report> without arguments). It is also a JSON
+file, however, it is not intended to be directly edited by the user.
+
+=head1 SAVING JIRA PASSWORD
+
+The C<commit>, C<issues>, and C<report> subcommand have to connect to 
+the JIRA instance specified in the config file. This requires authentication,
+in the form of an user name and password. The user name is also specified
+in the config file, however, the password is not.
+
+On systems that have a keyring (more precisely, any working keyring 
+implementation supported by the Passwd::Keyring::Auto module, which must
+also be installed if keyring support is desired), the password is asked only once, then saved into the
+keyring safely.
+
+On systems without keyring support the JIRA password is asked before every
+command that needs JIRA access.
+
+Storing the password in plaintext is not supported (nor is it recommended).
+
+=cut
+
 use strict;
 use warnings;
 no warnings qw/experimental/;

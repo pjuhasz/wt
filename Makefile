@@ -8,8 +8,11 @@ MANDIR = $(PREFIX)/share/man/man1
 
 all: man-doc
 
-man-doc: $(README)
-	pod2man $(README) | gzip > $(SCRIPTNAME).1.gz
+man-doc: $(SCRIPTNAME)
+	pod2man $(SCRIPTNAME) | gzip > $(SCRIPTNAME).1.gz
+
+readme: $(SCRIPTNAME)
+	podselect $(SCRIPTNAME) > $(README)
 
 install: man-doc
 	install $(SCRIPTNAME) $(BINDIR)

@@ -369,4 +369,3 @@ command that needs JIRA access.
 
 Storing the password in plaintext is not supported (nor is it recommended).
 
-=cut
