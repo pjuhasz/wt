@@ -735,6 +735,7 @@ sub add {
 
 	# first argument: from-to time or relative interval
 	my $interval = shift @ARGV;
+	die "Error: missing time or interval spec\n" unless defined $interval;
 	my ($start_time, $end_time);
 
 	# relative interval
