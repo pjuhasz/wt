@@ -1049,7 +1049,13 @@ sub _handle_jira_error {
 	}
 	else {
 		my $error = decode_json $response->decoded_content;
-		say STDERR join "\n", @{$error->{errorMessages}};
+		say STDERR join "\n",
+			@{$error->{errorMessages}}
+			if exists $error->{errorMessages} and ref $error->{errorMessages} eq 'ARRAY' and @{$error->{errorMessages}};
+		say STDERR join "\n",
+			map { $_.": ".$error->{errors}->{$_} }
+			keys %{$error->{errors}}
+			if exists $error->{errors} and ref $error->{errors} eq 'HASH';
 	}
 	$ret = 1;
 }
