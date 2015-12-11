@@ -465,8 +465,15 @@ sub help {
 
 sub list_local {
 	my $i = 1;
-	for my $wt (@{$state->{local}}) {
-		print print_wtline($wt, $i++);
+	for my $wt (
+		map {$_->[1]}
+		sort { $a->[0] cmp $b->[0] }
+		map { [(join "\t",
+			_print_date($_->{date}),
+			_print_time($_->{start_time}),
+			_print_time($_->{end_time}) ), $_] }
+		@{$state->{local}}) {
+			print print_wtline($wt, $i++);
 	}
 	if (@{$state->{local}}) {
 		say "";
