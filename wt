@@ -730,6 +730,7 @@ sub add {
 
 	# need to check if first arg is interval spec (single dash or dash-number)
 	# before calling GetOptions
+	Getopt::Long::Configure(qw/no_ignore_case pass_through/);
 	unless ($ARGV[0] =~ /^\-$|^\-\d|^\+/) {
 		GetOptions(
 			'date=s'     => sub { $date = parse_date($_[1]); },
@@ -737,7 +738,8 @@ sub add {
 			'commit!'    => \$autocommit,
 			'activity=s' => \$activity,
 			'force!'     => \$no_overlap_check,
-		) or help('add');
+		);
+		help('add') if @ARGV and $ARGV[0] =~ /-[^0-9]/;
 	}
 
 	# first argument: from-to time or relative interval
