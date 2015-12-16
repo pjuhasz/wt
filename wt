@@ -14,7 +14,7 @@ Available subcommands:
     wt commit
     wt start [-c] [ISSUE]
     wt report [START] [END] [ISSUE]
-    wt rm INDEX|all
+    wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
     wt
@@ -205,12 +205,19 @@ by default 100.
 
 =head2 RM
 
-    wt rm INDEX|all
+    wt rm [-r] INDEX|all
 
-Delete one local wt entry. The index number of the entry to be deleted is
+Without the -r or --remote switch, this subcommand deletes one local wt entry.
+The index number of the entry to be deleted is
 the same as reported by "wt" without arguments.
 
 Alternatively, if called as "wt rm all", all local entries are deleted.
+
+With the -r or --remote switch, this subcommand does something completely
+different: it removes an already committed entry from JIRA.
+
+In this case the INDEX argument is understood as the index of the entry
+in the list of B<remote> entries, as reported by the last C<wt query> command.
 
 =head2 LIST
 
@@ -356,7 +363,7 @@ file, however, it is not intended to be directly edited by the user.
 
 =head1 SAVING JIRA PASSWORD
 
-The C<commit>, C<issues>, and C<report> subcommand have to connect to 
+The C<commit>, C<issues>, C<rm --remote> and C<report> subcommand have to connect to 
 the JIRA instance specified in the config file. This requires authentication,
 in the form of an user name and password. The user name is also specified
 in the config file, however, the password is not.
