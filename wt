@@ -513,27 +513,52 @@ sub set_alias {
 }
 
 sub rm {
-	my $idx = shift @ARGV;
-	die "Error: specify the index of local wt record to be deleted" unless $idx;
-	die "Error: no local wt records to delete\n" unless scalar @{$state->{local}};
+	my $remote = 0;
+	GetOptions(
+		'remote!'  => \$remote,
+	) or help('rm');
 	
-	if ($idx eq "all") {
-		$state->{local} = [];
-		say "All local wt records deleted!";
-	}
-	else {
-		die "Error: index must be 1..".scalar @{$state->{local}}."\n" unless $idx =~ /^\d+$/ and $idx >= 1 and $idx <= scalar @{$state->{local}};
-		# at this point we should have a valid index to delete
-		splice @{$state->{local}}, $idx-1, 1;
-		
-		# update start mark to end of last entry
-		if (@{$state->{local}}) {
-			$state->{current_project} = $state->{local}[-1]{project};
-			$state->{start_mark} = { t => $state->{local}[-1]{end_time}, d => $state->{local}[-1]{date} };
+	my $idx = shift @ARGV;
+	if ($remote) {
+		die "Error: specify the index of remote wt record to be deleted" unless $idx;
+		die "Error: no remote wt records to delete\n" unless scalar @{$state->{remote}};
+
+		my $pw = get_pw();
+
+		if ($idx eq "all") {
+			_rm_one_remote($_, $pw) for 0..$#{$state->{remote}};
 		}
+		else {
+			die "Error: index must be 1..".scalar @{$state->{remote}}."\n" unless $idx =~ /^\d+$/ and $idx >= 1 and $idx <= scalar @{$state->{remote}};
+			_rm_one_remote($idx-1, $pw);
+		}
+		# delete remote entries locally that were successfully deleted remotely
+		$state->{remote} = [ grep { not exists $_->{deleted} } @{$state->{remote}} ];
+		save_state($state_fn, $state);
+		list_remote(on_error => "No remote worklog records.");
+ 	}
+	else {
+		die "Error: specify the index of local wt record to be deleted" unless $idx;
+		die "Error: no local wt records to delete\n" unless scalar @{$state->{local}};
+
+		if ($idx eq "all") {
+			$state->{local} = [];
+			say "All local wt records deleted!";
+		}
+		else {
+			die "Error: index must be 1..".scalar @{$state->{local}}."\n" unless $idx =~ /^\d+$/ and $idx >= 1 and $idx <= scalar @{$state->{local}};
+			# at this point we should have a valid index to delete
+			splice @{$state->{local}}, $idx-1, 1;
+			
+			# update start mark to end of last entry
+			if (@{$state->{local}}) {
+				$state->{current_project} = $state->{local}[-1]{project};
+				$state->{start_mark} = { t => $state->{local}[-1]{end_time}, d => $state->{local}[-1]{date} };
+			}
+		}
+		save_state($state_fn, $state); 
+		list_local();
 	}
-	save_state($state_fn, $state); 
-	list_local();
 }
 
 sub set_mark {
@@ -846,6 +871,29 @@ sub add {
 
 	if ($autocommit or $config->{autocommit}) {
 		commit();
+	}
+}
+
+###############
+
+sub _rm_one_remote {
+	my $idx = shift;
+	my $pw = shift;
+
+	my $id = $state->{remote}[$idx]{id};
+	my $worklog_url = $config->{jira_base_url}.$config->{worklog_url}.$id.'/';
+	my $req = HTTP::Request->new('DELETE', $worklog_url);
+	$req->authorization_basic($config->{user_name}, $pw);
+
+	my $ua = LWP::UserAgent->new;
+	my $response = $ua->request($req);
+
+	if ( $response->is_success() ) {
+		# mark locally stored remote entry if delete was successful
+		$state->{remote}[$idx]->{deleted} = 1;
+	}
+	else {
+		_handle_jira_error($response);
 	}
 }
 
