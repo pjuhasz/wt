@@ -569,9 +569,7 @@ sub set_mark {
 sub commit {
 	my $pw = get_pw();
 
-	my @lines = @{$state->{local}};
-
-	for my $wtline (@lines) {
+	for my $wtline (@{$state->{local}}) {
 		my $json = wtline_to_jira_json($wtline);
 		my $worklog_url = $config->{jira_base_url}.$config->{worklog_url};
 		my $req = HTTP::Request->new('POST', $worklog_url);
@@ -583,13 +581,15 @@ sub commit {
 		my $response = $ua->request($req);
 		
 		if ( $response->is_success() ) {
-			# delete locally stored wt line if commit was successful
-			shift @{$state->{local}};
+			# mark locally stored wt line if commit was successful
+			$wtline->{committed} = 1;
 		}
 		else {
 			_handle_jira_error($response);
 		}
 	}
+	# delete wt lines that were successfully committed
+	$state->{local} = [ grep { not exists $_->{committed} } @{$state->{local}} ];
 
 	save_state($state_fn, $state);
 }
