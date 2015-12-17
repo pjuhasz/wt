@@ -849,7 +849,10 @@ sub add {
 	# special hack: no comment is required for lunch
 	$comment = "lunch" if $comment eq '' and $project_str eq "lunch";
 	die "Error: Comment is required\n" if $comment eq '';
+	# use saved comment if one is available and explicitly requested
 	$comment = $state->{current_comment} if $comment eq '-' and defined $state->{current_comment};
+	# and save current comment for future use
+	$state->{current_comment} = $comment;
 
 	# activity may have been set by option
 	# special hack: no comment is required for lunch
