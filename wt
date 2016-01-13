@@ -402,7 +402,7 @@ use Encode;
 
 # keyring support is optional, will be enabled only
 # if the module is installed
-our $have_keyring;
+my $have_keyring;
 BEGIN {
 	$have_keyring = eval {
 		require Passwd::Keyring::Auto;
@@ -494,6 +494,7 @@ sub list_local {
 	}
 
 	print_unlogged();
+	return;
 }
 
 sub set_alias {
@@ -519,6 +520,7 @@ sub set_alias {
 			$ret = 1;
 		}
 	}
+	return;
 }
 
 sub rm {
@@ -529,7 +531,7 @@ sub rm {
 	
 	my $idx = shift @ARGV;
 	if ($remote) {
-		die "Error: specify the index of remote wt record to be deleted" unless $idx;
+		die "Error: specify the index of remote wt record to be deleted\n" unless $idx;
 		die "Error: no remote wt records to delete\n" unless scalar @{$state->{remote}};
 
 		my $pw = get_pw();
@@ -547,7 +549,7 @@ sub rm {
 		list_remote(on_error => "No remote worklog records.");
  	}
 	else {
-		die "Error: specify the index of local wt record to be deleted" unless $idx;
+		die "Error: specify the index of local wt record to be deleted\n" unless $idx;
 		die "Error: no local wt records to delete\n" unless scalar @{$state->{local}};
 
 		if ($idx eq "all") {
@@ -568,6 +570,7 @@ sub rm {
 		save_state($state_fn, $state); 
 		list_local();
 	}
+	return;
 }
 
 sub set_mark {
@@ -599,6 +602,7 @@ sub set_mark {
 	}
 
 	save_state($state_fn, $state); 
+	return;
 }
 
 sub commit {
@@ -627,6 +631,7 @@ sub commit {
 	$state->{local} = [ grep { not exists $_->{committed} } @{$state->{local}} ];
 
 	save_state($state_fn, $state);
+	return;
 }
 
 sub query {
@@ -674,6 +679,7 @@ sub query {
 		# print last saved query, don't actually ask jira
 		list_remote(on_error => "There is no saved query.");
 	} 
+	return;
 
 }
 
@@ -713,7 +719,7 @@ sub get_issues {
 
 	my $pw = get_pw();
 	
-	my $json = encode_json {
+	my $json = encode_json({
 		"jql" => $jql,
 		"startAt" => 0,
 		"maxResults" => $max,
@@ -722,7 +728,7 @@ sub get_issues {
 			"status",
 			"assignee"
 		]
-	};
+	});
 	my $jira_url = $config->{jira_base_url}.$config->{search_url};
 	my $req = HTTP::Request->new('POST', $jira_url);
 	$req->header('Content-Type' => 'application/json;charset=UTF-8');
@@ -749,7 +755,8 @@ sub get_issues {
 	else {
 		_handle_jira_error($response);
 	}
-	
+	return;
+
 }
 
 sub add {
@@ -872,7 +879,7 @@ sub add {
 	and my $overlap_idx = check_overlap($wtline)) {
 		die "Error: input overlaps with existing entry:\n" .
 			 print_wtline($state->{local}[$overlap_idx-1], $overlap_idx) .
-			 print_wtline($wtline, undef);
+			 print_wtline($wtline, undef) ."\n";
 	}
 
 	push @{$state->{local}}, $wtline;
@@ -886,6 +893,7 @@ sub add {
 	if ($autocommit or $config->{autocommit}) {
 		commit();
 	}
+	return;
 }
 
 ###############
@@ -909,14 +917,16 @@ sub _rm_one_remote {
 	else {
 		_handle_jira_error($response);
 	}
+	return;
 }
 
 ###############
 
 sub _load_json {
 	my ($fn) = @_;
-	open(my $FH, "<", $fn) or return undef;
-	my $json = join "", <$FH>;
+	local $/ = undef;
+	open(my $FH, "<", $fn) or return; # undef
+	my $json = <$FH>;
 	close $FH;
 	return decode_json $json;
 }
@@ -930,6 +940,7 @@ sub _save_json {
 	else {
 		warn "Error: can't write $what file $fn\n";
 	}
+	return;
 }
 
 sub load_config {
@@ -949,7 +960,8 @@ sub load_state {
 }
 
 sub save_state {
-	return _save_json($_[0], $_[1], "state");
+	_save_json($_[0], $_[1], "state");
+	return;
 }
 
 ###############
@@ -1041,6 +1053,7 @@ sub update_saved_issue_summaries {
 	if (defined $args{from} and exists $actions{ $args{from} }) {
 		$actions{ $args{from} }->(@$issuelist);
 	}
+	return;
 }
 
 sub summary {
@@ -1080,6 +1093,7 @@ sub list_remote {
 		say $args{on_error};
 		$ret = 1;
 	}
+	return;
 }
 
 sub print_unlogged {
@@ -1104,6 +1118,7 @@ sub print_unlogged {
 			}
 		}
 	}
+	return;
 }
 
 sub _current_project {
@@ -1137,16 +1152,17 @@ sub _handle_jira_error {
 			if exists $error->{errors} and ref $error->{errors} eq 'HASH';
 	}
 	$ret = 1;
+	return;
 }
 
 ###############
 
 sub _print_date {
-	join "-", map { pad($_[0]->{$_}) } qw/Y M D/;
+	return join "-", map { pad($_[0]->{$_}) } qw/Y M D/;
 }
 
 sub _print_time {
-	join ":", map { pad($_[0]->{$_}) } qw/H M S/;
+	return join ":", map { pad($_[0]->{$_}) } qw/H M S/;
 }
 
 sub _wt2tfe {
@@ -1184,14 +1200,14 @@ sub parse_date {
 	my $date = {Y => $lt[5]+1900, M => $lt[4]+1, D => $lt[3]};
 	
 	if (defined $dstr and $dstr) {
-		if ($dstr =~ /^\d\d?$/) {
+		if ($dstr =~ /^ \d\d? $/x) {
 			$date->{D} = 0+$dstr;
 		}
-		elsif ($dstr =~ /^(\d\d?)-(\d\d?)$/) {
+		elsif ($dstr =~ /^ (\d\d?) - (\d\d?) $/x) {
 			$date->{M} = 0+$1;
 			$date->{D} = 0+$2;
 		}
-		elsif ($dstr =~ /^(\d{4})-(\d\d?)-(\d\d?)$/) {
+		elsif ($dstr =~ /^ (\d{4}) - (\d\d?) - (\d\d?) $/x) {
 			$date->{Y} = 0+$1;
 			$date->{M} = 0+$2;
 			$date->{D} = 0+$3;
@@ -1223,27 +1239,27 @@ sub parse_time {
 			$is_interval = 1;
 		}
 
-		if ($is_interval and $dstr =~ /^(\d\d?)\.(\d+)$/) {
+		if ($is_interval and $dstr =~ /^ (\d\d?) \. (\d+) $/x) {
 			$time->{H} = 0+$1;
 			$time->{M} = int($2 * 6 + 0.5); # * 60 / 10
 			$time->{S} = 0;
 		}
-		elsif ($is_interval and $dstr =~ /^(\d+)m$/) {
+		elsif ($is_interval and $dstr =~ /^ (\d+) m $/x) {
 			my $m = 0+$1;
 			$time->{H} = int($m / 60);
 			$time->{M} = $m % 60;
 			$time->{S} = 0;
 		}
-		elsif ($dstr =~ /^(?:[01]?\d|2[0-3])$/) {
+		elsif ($dstr =~ /^ (?: [0 1]? \d | 2 [0-3] ) $/x) {
 			$time->{H} = 0+$dstr;
 			$time->{M} = $time->{S} = 0;
 		}
-		elsif ($dstr =~ /^([01]?\d|2[0-3]):([0-5]?\d)$/) {
+		elsif ($dstr =~ /^ ( [0 1]? \d | 2 [0-3] ) : ( [0-5]? \d ) $/x) {
 			$time->{H} = 0+$1;
 			$time->{M} = 0+$2;
 			$time->{S} = 0;
 		}
-		elsif ($dstr =~ /^([01]?\d|2[0-3]):([0-5]?\d):([0-5]?\d)/) { # drop fractional seconds
+		elsif ($dstr =~ /^ ( [0 1]? \d | 2 [0-3] ) : ( [0-5]? \d ) : ( [0-5]? \d ) /x) { # drop fractional seconds
 			$time->{H} = 0+$1;
 			$time->{M} = 0+$2;
 			$time->{S} = 0+$3;
@@ -1266,11 +1282,11 @@ sub parse_time {
 sub _trunc {
 	my ($text, $len) = @_;
 	my $shortened = $len - 3;
-	length $text > $shortened ? substr($text, 0, $shortened).'...' : $text;
+	return (length $text > $shortened) ? substr($text, 0, $shortened).'...' : $text;
 }
 
 sub pad {
-	($_[0] < 10) ? '0'.$_[0] : $_[0];
+	return ($_[0] < 10) ? '0'.$_[0] : $_[0];
 }
 
 sub format_date {
@@ -1309,15 +1325,15 @@ sub _yesterday {
 }
 
 sub increment_time {
-		my ($start, $increment) = @_;
-		
-		my $t = $start->{H} * 3600 + $start->{M} * 60 + $start->{S};
-		$t += $increment;
-		$t = 86400 if $t > 86400; # FIXME
-		my $h = int($t / 3600);
-		my $m = int($t / 60) % 60;
-		my $s = $t % 60;
-		return { H => $h, M => $m, S => $s };
+	my ($start, $increment) = @_;
+	
+	my $t = $start->{H} * 3600 + $start->{M} * 60 + $start->{S};
+	$t += $increment;
+	$t = 86400 if $t > 86400; # FIXME
+	my $h = int($t / 3600);
+	my $m = int($t / 60) % 60;
+	my $s = $t % 60;
+	return { H => $h, M => $m, S => $s };
 }
 
 sub get_pw {
@@ -1343,6 +1359,7 @@ sub forget_pw {
 		my $username = $config->{user_name};
 		$keyring->clear_password($username, "wt_client");
 	}
+	return;
 }
 
 sub read_pw_from_console {
