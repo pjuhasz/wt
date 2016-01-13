@@ -595,8 +595,7 @@ sub set_mark {
 		print_unlogged();
 	}
 	else {
-		my $on_project =  defined $state->{current_project} ? "on issue $state->{current_project}" : "";
-		say "Started work $on_project";
+		say "Started work", _current_project();
 	}
 
 	save_state($state_fn, $state); 
@@ -1101,19 +1100,23 @@ sub print_unlogged {
 				$m = int($interval /   60); $interval -= $m *   60;
 				$s = int($interval);
 				$interval = join ':', $h, pad($m), pad($s);
-				my $on_project = defined $state->{current_project} ?
-									" on issue $state->{current_project}" :
-									"";
-				my $project_summary = defined $state->{current_project} && exists $state->{issues}->{ $state->{current_project} } ?
-									"\t".$state->{issues}->{ $state->{current_project} } :
-									"";
-				my $comment = defined $state->{current_comment} && defined $state->{current_project} ?
-									"\t($state->{current_comment})" :
-									"";
-				say "Unlogged work: ", $interval, $on_project, $project_summary, $comment;
+				say "Unlogged work: ", $interval, _current_project();
 			}
 		}
 	}
+}
+
+sub _current_project {
+	my $on_project = defined $state->{current_project} ?
+						" on issue $state->{current_project}" :
+						"";
+	my $project_summary = defined $state->{current_project} && exists $state->{issues}->{ $state->{current_project} } ?
+						"\t".$state->{issues}->{ $state->{current_project} } :
+						"";
+	my $comment = defined $state->{current_comment} && defined $state->{current_project} ?
+						"\t($state->{current_comment})" :
+						"";
+	return join "", $on_project, $project_summary, $comment;
 }
 
 sub _handle_jira_error {
