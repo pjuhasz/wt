@@ -353,6 +353,18 @@ Turns on autocommit mode: C<commit> is called after each invocation of
 
 Disables checking for overlapping time intervals in C<wt add>. Boolean key.
 
+=holidays
+
+An array of dates of fixed holidays that affect estimation of remaining 
+working time for C<wt report month>.
+Dates must be in MM-DD format.
+
+=workdays
+
+An array of dates that should count as workdays (despite falling on Saturday or Sunday).
+This also affects estimation of remaining working time.
+Dates must be in MM-DD format.
+
 =back
 
 
@@ -364,7 +376,9 @@ Example:
 			"search_url": "/rest/api/2/search",
 			"user_name": "homer.simpson",
 			"lunch_project": "CMPS-19",
-			"autocommit": true
+			"autocommit": true,
+			"holidays": ["01-01", "03-14", "03-15", "03-28", "05-01", "05-16", "08-20", "10-23", "10-31", "11-01", "12-24", "12-25", "12-26"],
+			"workdays": ["03-05", "10-15"]
 	}
 
 F<wt.state>, the file to store persistent state between consequent runs
@@ -1239,10 +1253,24 @@ sub _estimate_remaining_workday_hours {
 	# simply incrementing is OK even at the end of the month because the for loop below will not run if 32 > 31
 	my $tomorrow = $today + 1;
 
+	my %holidays;
+	if (exists $config->{holidays} and ref $config->{holidays} eq 'ARRAY') {
+		%holidays = map { ($_ => 1) } @{$config->{holidays}};
+	}
+	my %workdays;
+	if (exists $config->{workdays} and ref $config->{workdays} eq 'ARRAY') {
+		%workdays = map { ($_ => 1) } @{$config->{workdays}};
+	}
+
 	for my $day ($tomorrow..$end_date->{D}) {
 		# assuming Monday-Friday are workdays, we can't do anything about fancy government holidays
 		my $dow = ($day - $today + $today_dow) % 7;
-		$sum_so_far += 8 unless $dow == 6 or $dow == 0; # 0 is Sunday according to Perl
+		my $dstr = sprintf "%02d-%02d", $end_date->{M}, $day;
+		# 0 is Sunday according to Perl
+		my $is_workday = 1 if not $dow == 6 and not $dow == 0;
+		$is_workday = 0 if exists $holidays{$dstr};
+		$is_workday = 1 if exists $workdays{$dstr};
+		$sum_so_far += 8 if $is_workday;
 	}
 	
 	return $sum_so_far;
