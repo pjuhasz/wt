@@ -13,7 +13,7 @@ Available subcommands:
     wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
     wt commit
     wt start [-c] [ISSUE] [COMMENT]
-    wt report [START] [END] [ISSUE]
+    wt report [month|START [END] [ISSUE]]
     wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
@@ -161,7 +161,7 @@ reset the timestamp.
 
 =head2 REPORT
 
-    wt report [START] [END] [PROJECT]
+    wt report [month|START [END] [ISSUE]]
     wt r ...
 
 Queries worklog entries from JIRA.
@@ -173,6 +173,12 @@ C<today> can be used to mean the current date.
 The end date may be omitted altogether, in which case the current date is assumed.
 
 An optional third argument can be used to filter for project name.
+
+Alternatively, if the first argument is C<month>, worklog entries between
+the start and end of the current month are queried. In this mode the
+reported sum of logged hours is amended with a projection for the remainder
+of the month, assuming that the user will log 8 hours for the remaining
+working days (Monday to Friday).
 
 If called without dates, prints the results of the last query
 (but doesn't start a new query).
@@ -635,17 +641,22 @@ sub commit {
 }
 
 sub query {
-	my $start_date_str = shift @ARGV;
+	my ($start_date_str, $end_date_str, $project) = @ARGV;
 	
 	if (defined $start_date_str) {
-		$start_date_str = undef if $start_date_str eq 'today';
-		my $start_date = parse_date($start_date_str);
-		help('report') unless defined $start_date;
+		my $whole_month_mode = $start_date_str eq 'month';
+		my ($start_date, $end_date);
 
-		my $end_date_str = shift @ARGV;
-		my $end_date = parse_date($end_date_str);
+		if ($whole_month_mode) {
+			($start_date, $end_date) = _get_month_start_end();
+		}
+		else {
+			$start_date_str = undef if $start_date_str eq 'today';
+			$start_date = parse_date($start_date_str);
+			help('report') unless defined $start_date;
 
-		my $project = shift @ARGV;
+			$end_date = parse_date($end_date_str);
+		}
 
 		my $pw = get_pw();
 
@@ -666,14 +677,14 @@ sub query {
 
 			update_saved_issue_summaries($state->{remote}, from => 'remote');
 
-			list_remote(on_error => "No worklog records in the specified date range.");
+			list_remote(on_error => "No worklog records in the specified date range.", estimate_month => $whole_month_mode);
 
 			save_state($state_fn, $state);
 		}
 		else {
 			_handle_jira_error($response);
 		}
-		
+
 	}
 	else {
 		# print last saved query, don't actually ask jira
@@ -1057,7 +1068,7 @@ sub update_saved_issue_summaries {
 }
 
 sub summary {
-	my $wt_arr = shift;
+	my ($wt_arr, $estimate_month) = @_;
 	
 	my %times;
 	my $cumulative_time = 0;
@@ -1068,14 +1079,19 @@ sub summary {
 	}
 
 	my $summary_lines = join "", map {
-			sprintf("% .2f\t%s\t%s\n", ($times{$_}/3600), $_, (exists $state->{issues}{$_} ? $state->{issues}{$_} : ""))
+			sprintf("% 6.2f\t%s\t%s\n", ($times{$_}/3600), $_, (exists $state->{issues}{$_} ? $state->{issues}{$_} : ""))
 		} 
 		sort { 
 			$times{$b} <=> $times{$a} 
 		} 
 		keys %times;
-	
-	return $summary_lines . "------\n" . sprintf "%.2f", $cumulative_time/3600;
+
+	my $cumulative_hours = $cumulative_time/3600;
+	my $res_str = $summary_lines . "------\n" . sprintf "% 6.2f", $cumulative_hours;
+	if (defined $estimate_month and $estimate_month) {
+		$res_str .= sprintf "/%.2f", _estimate_remaining_workday_hours($cumulative_hours);
+	}
+	return $res_str;
 }
 
 sub list_remote {
@@ -1087,7 +1103,7 @@ sub list_remote {
 	}
 	if (@remote) {
 		say "";
-		say summary([ map {jira_json_to_wtline($_)} @remote ]);
+		say summary([ map {jira_json_to_wtline($_)} @remote ], $args{estimate_month});
 	}
 	else {
 		say $args{on_error};
@@ -1189,6 +1205,39 @@ sub check_overlap {
 	}
 	
 	return 0;
+}
+
+# get the first and last day of the current month (leap years accounted for)
+sub _get_month_start_end {
+	my $today = parse_date();
+	my $start = { %$today }; # deep copy
+	my $end   = { %$today };
+	
+	$start->{D} = 1;
+	$end->{D} = [undef, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]->[ $today->{M} ];
+	if ($end->{M} == 2 and ($end->{Y} % 400 == 0 or ($end->{Y} % 100 != 0 and $end->{Y} % 4 == 0))) {
+		$end->{D} = 29;
+	}
+	return $start, $end;
+}
+
+sub _estimate_remaining_workday_hours {
+	my ($sum_so_far) = @_;
+
+	my (undef, $end_date) = _get_month_start_end();
+	# we need to use localtime to get today's day of the week
+	my ($today, $today_dow) = (localtime(time))[3, 6];
+	# if we don't want to overestimate with today's work, we need to use tomorrow as starting point
+	# simply incrementing is OK even at the end of the month because the for loop below will not run if 32 > 31
+	my $tomorrow = $today + 1;
+
+	for my $day ($tomorrow..$end_date->{D}) {
+		# assuming Monday-Friday are workdays, we can't do anything about fancy government holidays
+		my $dow = ($day - $today + $today_dow) % 7; 
+		$sum_so_far += 8 unless $dow == 5 or $dow == 6;
+	}
+	
+	return $sum_so_far;
 }
 
 # if date is defined, try to parse it from YYYY-MM-DD or MM-DD or DD string, otherwise get current date
