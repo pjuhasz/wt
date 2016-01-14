@@ -1089,7 +1089,7 @@ sub summary {
 	my $cumulative_hours = $cumulative_time/3600;
 	my $res_str = $summary_lines . "------\n" . sprintf "% 6.2f", $cumulative_hours;
 	if (defined $estimate_month and $estimate_month) {
-		$res_str .= sprintf "/%.2f", _estimate_remaining_workday_hours($cumulative_hours);
+		$res_str .= sprintf " (%.2f estimated at the end of the month)", _estimate_remaining_workday_hours($cumulative_hours);
 	}
 	return $res_str;
 }
@@ -1233,8 +1233,8 @@ sub _estimate_remaining_workday_hours {
 
 	for my $day ($tomorrow..$end_date->{D}) {
 		# assuming Monday-Friday are workdays, we can't do anything about fancy government holidays
-		my $dow = ($day - $today + $today_dow) % 7; 
-		$sum_so_far += 8 unless $dow == 5 or $dow == 6;
+		my $dow = ($day - $today + $today_dow) % 7;
+		$sum_so_far += 8 unless $dow == 6 or $dow == 0; # 0 is Sunday according to Perl
 	}
 	
 	return $sum_so_far;
