@@ -10,9 +10,9 @@ Available subcommands:
 
     wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
     wt commit
-    wt start [-c] [ISSUE]
-    wt report [START] [END] [ISSUE]
-    wt rm INDEX|all
+    wt start [-c] [ISSUE] [COMMENT]
+    wt report [month [DATE] | START [END] [ISSUE]]
+    wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
     wt
@@ -80,6 +80,8 @@ A single dash means to use the current project, if one is available.
 
 Arbitrary text (can contain spaces etc. if quoted) to describe
 the task/bugfix etc.
+A single dash means to repeat the comment for the last entry (or the
+comment saved with C<wt start>), if one is available.
 
 =back
 
@@ -145,7 +147,7 @@ Successfully committed entries are deleted from the list.
 
 =head2 START
 
-	wt start [-c|--change] [ISSUE]
+	wt start [-c|--change] [ISSUE] [COMMENT]
 	wt s ...
 
 Saves a timestamp with the current time. In effect, this command means
@@ -157,7 +159,7 @@ reset the timestamp.
 
 =head2 REPORT
 
-    wt report [START] [END] [PROJECT]
+    wt report [month [DATE] | START [END] [ISSUE]]
     wt r ...
 
 Queries worklog entries from JIRA.
@@ -170,8 +172,17 @@ The end date may be omitted altogether, in which case the current date is assume
 
 An optional third argument can be used to filter for project name.
 
-If called without dates, prints the results of the last query
-(but doesn't start a new query).
+Alternatively, if the first argument is C<month>, worklog entries between
+the start and end of the current month are queried. In this mode the
+reported sum of logged hours is amended with a projection for the remainder
+of the month, assuming that the user will log 8 hours for the remaining
+working days (Monday to Friday).
+
+An optional second argument after C<month> in the format of YYYY-MM or MM
+causes worklogs from the specified month to be queried instead of the current month.
+
+If C<wt report> is called without any arguments, it prints the
+results of the last query (but doesn't send a new query to JIRA).
 
 =head2 ISSUES
 
@@ -203,12 +214,19 @@ by default 100.
 
 =head2 RM
 
-    wt rm INDEX|all
+    wt rm [-r] INDEX|all
 
-Delete one local wt entry. The index number of the entry to be deleted is
+Without the -r or --remote switch, this subcommand deletes one local wt entry.
+The index number of the entry to be deleted is
 the same as reported by "wt" without arguments.
 
 Alternatively, if called as "wt rm all", all local entries are deleted.
+
+With the -r or --remote switch, this subcommand does something completely
+different: it removes an already committed entry from JIRA.
+
+In this case the INDEX argument is understood as the index of the entry
+in the list of B<remote> entries, as reported by the last C<wt query> command.
 
 =head2 LIST
 
@@ -333,6 +351,18 @@ Turns on autocommit mode: C<commit> is called after each invocation of
 
 Disables checking for overlapping time intervals in C<wt add>. Boolean key.
 
+=item holidays
+
+An array of dates of fixed holidays that affect estimation of remaining 
+working time for C<wt report month>.
+Dates must be in MM-DD format.
+
+=item workdays
+
+An array of dates that should count as workdays (despite falling on Saturday or Sunday).
+This also affects estimation of remaining working time.
+Dates must be in MM-DD format.
+
 =back
 
 
@@ -344,7 +374,9 @@ Example:
 			"search_url": "/rest/api/2/search",
 			"user_name": "homer.simpson",
 			"lunch_project": "CMPS-19",
-			"autocommit": true
+			"autocommit": true,
+			"holidays": ["01-01", "03-14", "03-15", "03-28", "05-01", "05-16", "08-20", "10-23", "10-31", "11-01", "12-24", "12-25", "12-26"],
+			"workdays": ["03-05", "10-15"]
 	}
 
 F<wt.state>, the file to store persistent state between consequent runs
@@ -354,7 +386,7 @@ file, however, it is not intended to be directly edited by the user.
 
 =head1 SAVING JIRA PASSWORD
 
-The C<commit>, C<issues>, and C<report> subcommand have to connect to 
+The C<commit>, C<issues>, C<rm --remote> and C<report> subcommand have to connect to 
 the JIRA instance specified in the config file. This requires authentication,
 in the form of an user name and password. The user name is also specified
 in the config file, however, the password is not.
