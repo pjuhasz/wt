@@ -353,13 +353,13 @@ Turns on autocommit mode: C<commit> is called after each invocation of
 
 Disables checking for overlapping time intervals in C<wt add>. Boolean key.
 
-=holidays
+=item holidays
 
 An array of dates of fixed holidays that affect estimation of remaining 
 working time for C<wt report month>.
 Dates must be in MM-DD format.
 
-=workdays
+=item workdays
 
 An array of dates that should count as workdays (despite falling on Saturday or Sunday).
 This also affects estimation of remaining working time.
