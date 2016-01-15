@@ -422,6 +422,7 @@ use DateTime;
 use Getopt::Long;
 use Encode::Locale;
 use Encode;
+use Carp;
 
 # keyring support is optional, will be enabled only
 # if the module is installed
@@ -440,6 +441,17 @@ my $state_fn  = File::Spec->catfile($ENV{HOME}, ".wt", "wt.state");
 my $config = load_config($config_fn);
 my $state  = load_state($state_fn);
 my $ret = 0;
+
+# precalculate workday and holiday hashes
+my %holidays;
+if (exists $config->{holidays} and ref $config->{holidays} eq 'ARRAY') {
+	%holidays = map { ($_ => 1) } @{$config->{holidays}};
+}
+my %workdays;
+if (exists $config->{workdays} and ref $config->{workdays} eq 'ARRAY') {
+	%workdays = map { ($_ => 1) } @{$config->{workdays}};
+}
+
 
 # take care of encoding for output...
 binmode STDOUT, ":encoding(UTF-8)";
@@ -661,13 +673,13 @@ sub query {
 	my ($start_date_str, $end_date_str, $project) = @ARGV;
 	
 	if (defined $start_date_str) {
-		my $whole_month_mode = $start_date_str eq 'month';
-		my ($start_date, $end_date);
+		my ($start_date, $end_date, $report_month_mode);
 
-		if ($whole_month_mode) {
+		if ($start_date_str eq 'month') {
+			$report_month_mode = 'current';
 			if (defined $end_date_str) {
 				$end_date_str .= '-1'; # kludge to add fake day part to YYYY-MM input to be able to use parse_date
-				$whole_month_mode = 0; # no point estimating for past or future months
+				$report_month_mode = 'historic';
 			}
 			($start_date, $end_date) = _get_month_start_end($end_date_str);
 		}
@@ -698,7 +710,7 @@ sub query {
 
 			update_saved_issue_summaries($state->{remote}, from => 'remote');
 
-			list_remote(on_error => "No worklog records in the specified date range.", estimate_month => $whole_month_mode);
+			list_remote(on_error => "No worklog records in the specified date range.", report_month => $report_month_mode);
 
 			save_state($state_fn, $state);
 		}
@@ -1109,8 +1121,24 @@ sub summary {
 
 	my $cumulative_hours = $cumulative_time/3600;
 	my $res_str = $summary_lines . "------\n" . sprintf "% 6.2f", $cumulative_hours;
-	if (defined $estimate_month and $estimate_month) {
-		$res_str .= sprintf " (%.2f estimated at the end of the month)", _estimate_remaining_workday_hours($cumulative_hours);
+
+	$estimate_month //= '';
+	if ($estimate_month eq 'current') {
+		my $today = parse_date();
+		my ($start_month, $end_month) = _get_month_start_end();
+		my $required_till_now        = _estimate_required_workday_hours($start_month, $today);
+		my $required_till_end_month  = _estimate_required_workday_hours($start_month, $end_month);
+		my $estimated_till_end_month = $required_till_end_month - $required_till_now + $cumulative_hours;
+		$res_str .= sprintf "/%.2f required, % 6.2f/%.2f estimated at the end of the month",
+						$required_till_now,
+						$estimated_till_end_month,
+						$required_till_end_month;
+	}
+	elsif ($estimate_month eq 'historic') {
+		my ($start_month, $end_month) = _get_month_start_end();
+		my $required_till_end_month  = _estimate_required_workday_hours($start_month, $end_month);
+		$res_str .= sprintf "/%.2f required",
+						$required_till_end_month;
 	}
 	return $res_str;
 }
@@ -1124,7 +1152,7 @@ sub list_remote {
 	}
 	if (@remote) {
 		say "";
-		say summary([ map {jira_json_to_wtline($_)} @remote ], $args{estimate_month});
+		say summary([ map {jira_json_to_wtline($_)} @remote ], $args{report_month});
 	}
 	else {
 		say $args{on_error};
@@ -1243,36 +1271,22 @@ sub _get_month_start_end {
 	return $start, $end;
 }
 
-sub _estimate_remaining_workday_hours {
-	my ($sum_so_far) = @_;
+sub _estimate_required_workday_hours {
+	my ($start_date, $end_date) = @_;
 
-	my (undef, $end_date) = _get_month_start_end();
-	# we need to use localtime to get today's day of the week
-	my ($today, $today_dow) = (localtime(time))[3, 6];
-	# if we don't want to overestimate with today's work, we need to use tomorrow as starting point
-	# simply incrementing is OK even at the end of the month because the for loop below will not run if 32 > 31
-	my $tomorrow = $today + 1;
+	croak "start date and end date must be in the same month" if $start_date->{M} != $end_date->{M};
 
-	my %holidays;
-	if (exists $config->{holidays} and ref $config->{holidays} eq 'ARRAY') {
-		%holidays = map { ($_ => 1) } @{$config->{holidays}};
-	}
-	my %workdays;
-	if (exists $config->{workdays} and ref $config->{workdays} eq 'ARRAY') {
-		%workdays = map { ($_ => 1) } @{$config->{workdays}};
-	}
-
-	for my $day ($tomorrow..$end_date->{D}) {
-		# assuming Monday-Friday are workdays, we can't do anything about fancy government holidays
-		my $dow = ($day - $today + $today_dow) % 7;
-		my $dstr = sprintf "%02d-%02d", $end_date->{M}, $day;
-		# 0 is Sunday according to Perl
-		my $is_workday = 1 if not $dow == 6 and not $dow == 0;
+	my $sum_so_far = 0;
+	my $dow = DateTime->new(year => $start_date->{Y}, month => $start_date->{M}, day => $start_date->{D})->day_of_week();
+	for my $day ($start_date->{D}..$end_date->{D}) {
+		my $dstr = sprintf "%02d-%02d", $start_date->{M}, $day;
+		my $is_workday = 1 if not $dow == 7 and not $dow == 1;
 		$is_workday = 0 if exists $holidays{$dstr};
 		$is_workday = 1 if exists $workdays{$dstr};
 		$sum_so_far += 8 if $is_workday;
+		$dow++; $dow = 1 if $dow > 7;
 	}
-	
+
 	return $sum_so_far;
 }
 
@@ -1406,6 +1420,11 @@ sub time_spent {
 
 sub _yesterday {
 	my $dt = DateTime->now()->subtract( days => 1 );
+	return {Y => $dt->year(), M => $dt->month(), D => $dt->day()};
+}
+
+sub _tomorrow {
+	my $dt = DateTime->now()->add( days => 1 );
 	return {Y => $dt->year(), M => $dt->month(), D => $dt->day()};
 }
 
