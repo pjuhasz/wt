@@ -689,6 +689,7 @@ sub query {
 			help('report') unless defined $start_date;
 
 			$end_date = parse_date($end_date_str);
+			$report_month_mode = 'custom_interval';
 		}
 
 		my $pw = get_pw();
@@ -1140,6 +1141,17 @@ sub summary {
 		$res_str .= sprintf "/%.2f required",
 						$required_till_end_month;
 	}
+	elsif ($estimate_month eq 'custom_interval') {
+		my $start_date = {Y => 2100, M => 1, D => 1};
+		my $end_date   = {Y => 1900, M => 1, D => 1};
+		for my $date (map { $_->{date} } @$wt_arr) {
+			$start_date = $date if compare_dates($start_date, $date) > 0;
+			$end_date   = $date if compare_dates($end_date,   $date) < 0;
+		}
+		my $required_in_interval = _estimate_required_workday_hours($start_date, $end_date);
+		$res_str .= sprintf "/%.2f required",
+						$required_in_interval;
+	}
 	return $res_str;
 }
 
@@ -1289,6 +1301,15 @@ sub _estimate_required_workday_hours {
 
 	return $sum_so_far;
 }
+
+sub compare_dates {
+	$_[0]->{Y} <=> $_[1]->{Y}
+				||
+	$_[0]->{M} <=> $_[1]->{M}
+				||
+	$_[0]->{D} <=> $_[1]->{D}
+};
+
 
 # if date is defined, try to parse it from YYYY-MM-DD or MM-DD or DD string, otherwise get current date
 # if year or month is missing, it is substituted from current date
