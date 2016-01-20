@@ -1286,17 +1286,18 @@ sub _get_month_start_end {
 sub _estimate_required_workday_hours {
 	my ($start_date, $end_date) = @_;
 
-	croak "start date and end date must be in the same month" if $start_date->{M} != $end_date->{M};
-
 	my $sum_so_far = 0;
-	my $dow = DateTime->new(year => $start_date->{Y}, month => $start_date->{M}, day => $start_date->{D})->day_of_week();
-	for my $day ($start_date->{D}..$end_date->{D}) {
-		my $dstr = sprintf "%02d-%02d", $start_date->{M}, $day;
+	my $day = DateTime->new(year => $start_date->{Y}, month => $start_date->{M}, day => $start_date->{D});
+	my $end_DT = DateTime->new(year => $end_date->{Y}, month => $end_date->{M}, day => $end_date->{D});
+
+	while ($day <= $end_DT) {
+		my $dow = $day->day_of_week();
+		my $dstr = sprintf "%02d-%02d", $day->month(), $day->day();
 		my $is_workday = 1 if not $dow == 6 and not $dow == 7;
 		$is_workday = 0 if exists $holidays{$dstr};
 		$is_workday = 1 if exists $workdays{$dstr};
 		$sum_so_far += 8 if $is_workday;
-		$dow++; $dow = 1 if $dow > 7;
+		$day->add(days => 1);
 	}
 
 	return $sum_so_far;
