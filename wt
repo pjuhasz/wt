@@ -929,7 +929,7 @@ sub add {
 
 	push @{$state->{local}}, $wtline;
 	
-	$state->{current_project} = $project;
+	$state->{current_project} = $project unless $project_str eq 'lunch';
 	$state->{start_mark} = { t => $end_time, d => $date };
 
 	save_state($state_fn, $state);
