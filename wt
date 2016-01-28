@@ -711,6 +711,7 @@ sub query {
 
 			update_saved_issue_summaries($state->{remote}, from => 'remote');
 
+			$state->{cached_query_month_mode} = $report_month_mode;
 			list_remote(on_error => "No worklog records in the specified date range.", report_month => $report_month_mode);
 
 			save_state($state_fn, $state);
@@ -722,7 +723,7 @@ sub query {
 	}
 	else {
 		# print last saved query, don't actually ask jira
-		list_remote(on_error => "There is no saved query.");
+		list_remote(on_error => "There is no saved query.", report_month => 'cached');
 	} 
 	return;
 
@@ -1124,34 +1125,43 @@ sub summary {
 	my $res_str = $summary_lines . "------\n" . sprintf "% 6.2f", $cumulative_hours;
 
 	$estimate_month //= '';
-	if ($estimate_month eq 'current') {
-		my $today = parse_date();
-		my ($start_month, $end_month) = _get_month_start_end();
-		my $required_till_now        = _estimate_required_workday_hours($start_month, $today);
-		my $required_till_end_month  = _estimate_required_workday_hours($start_month, $end_month);
-		my $estimated_till_end_month = $required_till_end_month - $required_till_now + $cumulative_hours;
-		$res_str .= sprintf "/%.2f required, % 6.2f/%.2f estimated at the end of the month",
-						$required_till_now,
-						$estimated_till_end_month,
-						$required_till_end_month;
+	my $cached_mode = $estimate_month eq 'cached';
+	if ($cached_mode and defined $state->{cached_query_month_mode}) {
+		$estimate_month = $state->{cached_query_month_mode};
 	}
-	elsif ($estimate_month eq 'historic') {
-		my ($start_month, $end_month) = _get_month_start_end();
-		my $required_till_end_month  = _estimate_required_workday_hours($start_month, $end_month);
-		$res_str .= sprintf "/%.2f required",
-						$required_till_end_month;
-	}
-	elsif ($estimate_month eq 'custom_interval') {
-		my $start_date = {Y => 2100, M => 1, D => 1};
-		my $end_date   = {Y => 1900, M => 1, D => 1};
-		for my $date (map { $_->{date} } @$wt_arr) {
-			$start_date = $date if compare_dates($start_date, $date) > 0;
-			$end_date   = $date if compare_dates($end_date,   $date) < 0;
-		}
-		my $required_in_interval = _estimate_required_workday_hours($start_date, $end_date);
-		$res_str .= sprintf "/%.2f required",
-						$required_in_interval;
-	}
+
+	my %summary_annotations = (
+		'current' => sub {
+			my $today = parse_date();
+			my ($start_month, $end_month) = _get_month_start_end();
+			my $required_till_now        = _estimate_required_workday_hours($start_month, $today);
+			my $required_till_end_month  = _estimate_required_workday_hours($start_month, $end_month);
+			my $estimated_till_end_month = $required_till_end_month - $required_till_now + $cumulative_hours;
+			return sprintf "/%.2f required, % 6.2f/%.2f estimated at the end of the month",
+							$required_till_now,
+							$estimated_till_end_month,
+							$required_till_end_month;
+		},
+		'historic' => sub {
+			my ($start_month, $end_month) = _get_month_start_end();
+			my $required_till_end_month  = _estimate_required_workday_hours($start_month, $end_month);
+			return sprintf "/%.2f required",
+							$required_till_end_month;
+		},
+		'custom_interval' => sub {
+			my $start_date = {Y => 2100, M => 1, D => 1};
+			my $end_date   = {Y => 1900, M => 1, D => 1};
+			for my $date (map { $_->{date} } @$wt_arr) {
+				$start_date = $date if compare_dates($start_date, $date) > 0;
+				$end_date   = $date if compare_dates($end_date,   $date) < 0;
+			}
+			my $required_in_interval = _estimate_required_workday_hours($start_date, $end_date);
+			return sprintf "/%.2f required",
+							$required_in_interval;
+		},
+	);
+	$res_str .= $summary_annotations{$estimate_month}->() if exists $summary_annotations{$estimate_month};
+	$res_str .= ' (cached query)' if $cached_mode;
 	return $res_str;
 }
 
