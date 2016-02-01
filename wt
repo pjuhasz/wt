@@ -712,7 +712,11 @@ sub query {
 			update_saved_issue_summaries($state->{remote}, from => 'remote');
 
 			$state->{cached_query_month_mode} = $report_month_mode;
-			list_remote(on_error => "No worklog records in the specified date range.", report_month => $report_month_mode);
+			list_remote(
+				on_error     => "No worklog records in the specified date range.",
+				report_month => $report_month_mode,
+				start_date   => $start_date,
+				end_date     => $end_date);
 
 			save_state($state_fn, $state);
 		}
@@ -1103,7 +1107,7 @@ sub update_saved_issue_summaries {
 }
 
 sub summary {
-	my ($wt_arr, $estimate_month) = @_;
+	my ($wt_arr, %args) = @_;
 	
 	my %times;
 	my $cumulative_time = 0;
@@ -1124,7 +1128,7 @@ sub summary {
 	my $cumulative_hours = $cumulative_time/3600;
 	my $res_str = $summary_lines . "------\n" . sprintf "% 6.2f", $cumulative_hours;
 
-	$estimate_month //= '';
+	my $estimate_month = $args{report_month} // '';
 	my $cached_mode = $estimate_month eq 'cached';
 	if ($cached_mode and defined $state->{cached_query_month_mode}) {
 		$estimate_month = $state->{cached_query_month_mode};
@@ -1144,7 +1148,9 @@ sub summary {
 		},
 		'historic' => sub {
 			my ($start_month, $end_month) = _get_month_start_end();
-			my $required_till_end_month  = _estimate_required_workday_hours($start_month, $end_month);
+			my $required_till_end_month  = _estimate_required_workday_hours(
+							$args{start_date} // $start_month,
+							$args{end_date}  // $end_month);
 			return sprintf "/%.2f required",
 							$required_till_end_month;
 		},
@@ -1155,7 +1161,9 @@ sub summary {
 				$start_date = $date if compare_dates($start_date, $date) > 0;
 				$end_date   = $date if compare_dates($end_date,   $date) < 0;
 			}
-			my $required_in_interval = _estimate_required_workday_hours($start_date, $end_date);
+			my $required_in_interval = _estimate_required_workday_hours(
+							$args{start_date} // $start_date,
+							$args{end_date}  // $end_date);
 			return sprintf "/%.2f required",
 							$required_in_interval;
 		},
@@ -1174,7 +1182,7 @@ sub list_remote {
 	}
 	if (@remote) {
 		say "";
-		say summary([ map {jira_json_to_wtline($_)} @remote ], $args{report_month});
+		say summary([ map {jira_json_to_wtline($_)} @remote ], %args);
 	}
 	else {
 		say $args{on_error};
