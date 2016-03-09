@@ -1319,8 +1319,8 @@ sub _estimate_required_workday_hours {
 	while ($day <= $end_DT) {
 		my $dow = $day->day_of_week();
 		my $dstr = sprintf "%02d-%02d", $day->month(), $day->day();
-		my $is_workday = 1 if not $dow == 6 and not $dow == 7;
-		$is_workday = 0 if exists $holidays{$dstr};
+		my $is_workday = 1;
+		$is_workday = 0 if $dow == 6 or $dow == 7 or exists $holidays{$dstr};
 		$is_workday = 1 if exists $workdays{$dstr};
 		$sum_so_far += 8 if $is_workday;
 		$day->add(days => 1);
