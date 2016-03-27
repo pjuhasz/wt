@@ -10,9 +10,9 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
-    wt commit
-    wt start [-c] [ISSUE] [COMMENT]
+    wt <c|ci|commit> [-d DATE|-y] [-c] [-f] [-a ACTIVITY] [-t INTERVAL] [-i ISSUE] [-m COMMENT]
+    wt <p|push>
+    wt <start s> [-c] [-d DATE] [-t TIME] [-i ISSUE] [-a ACTIVITY] [-m COMMENT]
     wt report [month [DATE] | START [END] [ISSUE]]
     wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
@@ -32,13 +32,15 @@ descriptions, can be queried.
 
 =head1 SUBCOMMANDS
 
-=head2 ADD
+=head2 COMMIT
 
-    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+    wt <ci|commit> [-d DATE|-y] [-c] [-f] [-a ACTIVITY] [-t INTERVAL] [-i ISSUE] [-m COMMENT]
 
 Adds an entry to the local list of wt entries.
 
-=head3 There are three mandatory arguments:
+=head3 There are no mandatory arguments
+
+However, if not given here, ISSUE and COMMENT and a start time must be defined by the sart mark.
 
 =over
 
@@ -51,15 +53,15 @@ Starting and ending time in B<HH:MM:SS> format, separated by a dash.
 If seconds are omitted, B<HH:MM:00> is assumed (whole minutes).
 If minutes are omitted, B<HH:00:00> is assumed (whole hours).
 
-If the starting time is omitted altogether, 
+If the starting time is omitted altogether,
 the saved start mark is used instead, if available.
 It is an error to omit the start if no start mark is available.
 
 If the ending time is omitted altogether, the current time is assumed.
 
 The ending time is also saved for the start mark of the next
-C<wt add> command. Thus, the interval argument may consist of 
-just a single dash in certain cases, meaning 
+C<wt commit> command. Thus, the interval argument may consist of
+just a single dash in certain cases, meaning
 "from the end of the last entry till now".
 
 Alternatively, a relative interval may be specified with a C<+> (plus sign)
@@ -87,7 +89,7 @@ comment saved with C<wt start>), if one is available.
 
 =back
 
-=head3 Options to the B<add> subcommand
+=head3 Options to the B<commit> subcommand
 
 =over
 
@@ -100,7 +102,7 @@ The default activity type is "Dev".
 =item C<-d> Set date
 
 By default, the date for the entry is the current date. This can be overridden
-by the C<-d> or C<--date> switch, which requires a date string in YYYY-MM-DD format. 
+by the C<-d> or C<--date> switch, which requires a date string in YYYY-MM-DD format.
 If the year or month is omitted, the current year or month is substituted.
 
 =item C<-y> Yesterday
@@ -109,7 +111,7 @@ The C<-y> or C<--yesterday> switch sets the date to yesterday.
 
 =item C<-c> Autocommit
 
-By default, the C<add> subcommand only adds the entry to the local list, 
+By default, the C<add> subcommand only adds the entry to the local list,
 which must be committed with C<wt commit> separately.
 
 This switch causes the entry to be committed immediately.
@@ -128,7 +130,7 @@ Specifying "lunch" as the issue name will cause the following:
 
 =over
 
-=item The project name will be substituted from the "lunch-project" key in 
+=item The project name will be substituted from the "lunch-project" key in
 wt.conf. If that key doesn't exist, the program terminates with an error.
 
 =item The comment becomes optional, if omitted, "lunch" will be substituted.
@@ -137,27 +139,25 @@ wt.conf. If that key doesn't exist, the program terminates with an error.
 
 =back
 
-The C<add> keyword may be omitted.
+=head2 PUSH
 
-=head2 COMMIT
-
-    wt commit
-    wt ci
+    wt <p|push>
 
 Attempt to commit local wt entries to JIRA.
 Successfully committed entries are deleted from the list.
 
 =head2 START
 
-	wt start [-c|--change] [ISSUE] [COMMENT]
-	wt s ...
+	wt <s|start> [-c|--change] [-p|--preserve] [-d DATE] [-i ISSUE] [-m COMMENT] [-a ACTIVITY]
 
-Saves a timestamp with the current time. In effect, this command means
-"I'm starting work now". An optional project (issue) name can be specified,
+Saves a timestamp with the given date, or the current time if it is omitted. In effect, this command means
+"I'm starting work". An optional project (issue) name can be specified, with a comment and activity.
 it will be saved as the current project.
 
-The C<--change> or C<-c> option only changes the current issue, but does not
+The C<--change> or C<-c> option only changes the current issue data, but does not
 reset the timestamp.
+
+If C<--preserve> or C<-p> is given, start mark data is preserved from the previous one.
 
 =head2 REPORT
 
@@ -208,10 +208,10 @@ In this case all issues are reported whose summaries match STRING.
 Alternatively, the -j or --jql switch can be used to pass a raw JQL query string to JIRA.
 The query string is not validated, just passed as is.
 
-The -a or --assigned switch can be used to restrict the search to those issues 
+The -a or --assigned switch can be used to restrict the search to those issues
 that are assigned to the current user.
 
-The -m or --max switch can be used to override the maximum number of issues reported, 
+The -m or --max switch can be used to override the maximum number of issues reported,
 by default 100.
 
 =head2 RM
@@ -293,7 +293,7 @@ or even
 
 	wt +50m BAR-42 foo
 
-if you don't care about exact starting and ending times, 
+if you don't care about exact starting and ending times,
 just the amount of time.
 
 You can use
@@ -346,7 +346,7 @@ Specify a JIRA issue for the C<wt add - lunch> feature
 
 =item autocommit
 
-Turns on autocommit mode: C<commit> is called after each invocation of 
+Turns on autocommit mode: C<commit> is called after each invocation of
 <wt add>. Boolean key.
 
 =item no_overlap_check
@@ -355,7 +355,7 @@ Disables checking for overlapping time intervals in C<wt add>. Boolean key.
 
 =item holidays
 
-An array of dates of fixed holidays that affect estimation of remaining 
+An array of dates of fixed holidays that affect estimation of remaining
 working time for C<wt report month>.
 Dates must be in MM-DD format.
 
@@ -388,12 +388,12 @@ file, however, it is not intended to be directly edited by the user.
 
 =head1 SAVING JIRA PASSWORD
 
-The C<commit>, C<issues>, C<rm --remote> and C<report> subcommand have to connect to 
+The C<commit>, C<issues>, C<rm --remote> and C<report> subcommand have to connect to
 the JIRA instance specified in the config file. This requires authentication,
 in the form of an user name and password. The user name is also specified
 in the config file, however, the password is not.
 
-On systems that have a keyring (more precisely, any working keyring 
+On systems that have a keyring (more precisely, any working keyring
 implementation supported by the Passwd::Keyring::Auto module, which must
 also be installed if keyring support is desired), the password is asked only once, then saved into the
 keyring safely.
@@ -478,9 +478,9 @@ for ($action) {
 	when ([qw/commit ci/]) { commit();     }
 	when ([qw/report r/])  { query();      }
 	when ([qw/help h/])    { help();       }
-	when ([qw/add a/])     { add();        }
+	when ([qw/push p/])    { pushout();    }
 	when ("rm")            { rm();         }
-	when (/^[\-\d\+]/)     { unshift @ARGV, $action; add(); }
+	#when (/^[\-\d\+]/)     { unshift @ARGV, $action; add(); }
 	default                { help();       }
 }
 
@@ -495,11 +495,11 @@ sub help {
 		when (undef)           { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
 		when ([qw/start s/])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/START"});  }
 		when ([qw/alias al/ ]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ALIAS"});  }
-		when ([qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"}); }
+		when ([qw/push p/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/PUSH"}); }
 		when ([qw/issues :/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ISSUES"}); }
 		when ([qw/report r/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}); }
 		when ([qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
-		when ([qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
+		when ([qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"});    }
 		when ("rm")            { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/RM"});     }
 		default                { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
 	}
@@ -563,7 +563,7 @@ sub rm {
 	GetOptions(
 		'remote!'  => \$remote,
 	) or help('rm');
-	
+
 	my $idx = shift @ARGV;
 	if ($remote) {
 		die "Error: specify the index of remote wt record to be deleted\n" unless $idx;
@@ -595,39 +595,58 @@ sub rm {
 			die "Error: index must be 1..".scalar @{$state->{local}}."\n" unless $idx =~ /^\d+$/ and $idx >= 1 and $idx <= scalar @{$state->{local}};
 			# at this point we should have a valid index to delete
 			splice @{$state->{local}}, $idx-1, 1;
-			
+
 			# update start mark to end of last entry
 			if (@{$state->{local}}) {
 				$state->{current_project} = $state->{local}[-1]{project};
 				$state->{start_mark} = { t => $state->{local}[-1]{end_time}, d => $state->{local}[-1]{date} };
 			}
 		}
-		save_state($state_fn, $state); 
+		save_state($state_fn, $state);
 		list_local();
 	}
 	return;
 }
 
+sub get_common_options {
+	my $options = {};
+	Getopt::Long::Configure(qw/pass_through/);
+	GetOptions($options, 'date=s', 'activity=s', 'message=s', 'issue=s', 'time=s');
+	Getopt::Long::Configure(qw/no_pass_through/);
+	return $options;
+}
+
 sub set_mark {
 	my $change = 0;
+	my $preserve = 0;
+
+	my $options = get_common_options();
 	GetOptions(
-		'change!' => \$change,
+		'change' => \$change,
+		'preserve' => \$preserve
 	) or help('start');
 
 	unless ($change) {
-		$state->{start_mark} = { t => parse_time(undef), d => parse_date(undef) };
+		$state->{start_mark} = { t => parse_time($options->{'time'}), d => parse_date($options->{date}) };
 	}
 
-	my $project_str = shift @ARGV;
+	my $project_str = $options->{issue};
 	if (defined $project_str) {
 		$state->{current_project} = uc $project_str;
-	}
-	elsif ($change) {
-		$project_str //= "";
-		die "Error: project name required for wt start --change\n";
+	} elsif (!$preserve) {
+		$state->{current_project} = undef
 	}
 
-	$state->{current_comment} = "@ARGV" if @ARGV;
+	if (defined($options->{message})) {
+		$state->{current_comment} = $options->{message};
+	} elsif (!$preserve) {
+		$state->{current_comment} = undef;
+	}
+	if (defined($options->{activity})) {
+		$state->{current_activity} = $options->{activity};
+	} elsif (!$preserve) {
+		$state->{current_activity} = undef;
+	}
 
 	if ($change) {
 		print_unlogged();
@@ -636,11 +655,11 @@ sub set_mark {
 		say "Started work", _current_project();
 	}
 
-	save_state($state_fn, $state); 
+	save_state($state_fn, $state);
 	return;
 }
 
-sub commit {
+sub pushout {
 	my $pw = get_pw();
 	my $worklog_url = $config->{jira_base_url}.$config->{worklog_url};
 
@@ -668,7 +687,7 @@ sub commit {
 
 sub query {
 	my ($start_date_str, $end_date_str, $project) = @ARGV;
-	
+
 	if (defined $start_date_str) {
 		my ($start_date, $end_date, $report_month_mode);
 
@@ -720,7 +739,7 @@ sub query {
 	else {
 		# print last saved query, don't actually ask jira
 		list_remote(on_error => "There is no saved query.", report_month => 'cached');
-	} 
+	}
 	return;
 
 }
@@ -775,13 +794,13 @@ sub get_issues {
 
 	if ( $response->is_success() ) {
 		my $raw_data = decode_json $response->decoded_content;
-		say for reverse map { 
-				sprintf "%-8s%-16s%-16s%s", 
-					$_->{key}, 
-					_trunc($_->{fields}{status}{name}, 15), 
-					$_->{fields}{assignee}{name} // "", 
+		say for reverse map {
+				sprintf "%-8s%-16s%-16s%s",
+					$_->{key},
+					_trunc($_->{fields}{status}{name}, 15),
+					$_->{fields}{assignee}{name} // "",
 					$_->{fields}{summary}
-				} 
+				}
 			@{$raw_data->{issues}};
 
 		update_saved_issue_summaries($raw_data->{issues}, from => 'issuelist');
@@ -794,12 +813,7 @@ sub get_issues {
 
 }
 
-sub add {
-	help("add") unless defined $ARGV[0];
-
-	# get current date as default
-	my $date = parse_date(undef);
-
+sub commit {
 	# defaults
 	my $autocommit = 0;
 	my $no_overlap_check = 0;
@@ -807,23 +821,25 @@ sub add {
 
 	# need to check if first arg is interval spec (single dash or dash-number)
 	# before calling GetOptions
-	Getopt::Long::Configure(qw/no_ignore_case pass_through/);
-	unless ($ARGV[0] =~ /^\-$|^\-\d|^\+/) {
-		GetOptions(
-			'date=s'     => sub { $date = parse_date($_[1]); },
-			'yesterday!' => sub { $date = _yesterday(); },
-			'commit!'    => \$autocommit,
-			'activity=s' => \$activity,
-			'force!'     => \$no_overlap_check,
-		);
-		help('add') if @ARGV and $ARGV[0] =~ /-[^0-9]/;
-	}
+	my $options = get_common_options();
+	# uses current date if no option given
+	my $date = parse_date($options->{date});
+
+	Getopt::Long::Configure(qw/no_ignore_case/);
+	GetOptions(
+		'yesterday' => sub { $date = _yesterday(); },
+		'commit'    => \$autocommit,
+		'force'     => \$no_overlap_check,
+	) or help('commit');
 
 	# first argument: from-to time or relative interval
-	my $interval = shift @ARGV;
-	die "Error: missing time or interval spec\n" unless defined $interval;
+	my $interval = $options->{'time'};
 	my ($start_time, $end_time);
+	if (!defined($interval) and !defined($state->{start_mark})) {
+		die "Error: missing interval spec, and no start mark\n";
+	}
 
+	$interval //= '';
 	# relative interval
 	if (index($interval, '+') == 0) {
 		if (defined $state->{start_mark}) {
@@ -860,43 +876,44 @@ sub add {
 	die "Error: ending time must be later than starting time\n" if time_spent($start_time, $end_time, noabs => 1) <= 0;
 
 	# second argument: project
-	my $project_str = shift @ARGV;
+	my $project_str = $options->{issue};
+	if (!defined($project_str) and !defined($state->{current_project})) {
+		die "Error: issue name not found in arguments or start mark\n";
+	}
 	my $project;
-	if (defined $project_str) {
-		if ($project_str eq "-") {
-			# use saved current project
-			$project = $state->{current_project};
-			die "Error: no current project available\n" unless defined $project;
-		}
-		elsif ($project_str eq "lunch") {
+	if (!defined $project_str) {
+		$project = $state->{current_project};
+		$project_str = $project;
+	}
+	if (!defined($project)) {
+		$project_str //= '';
+		if ($project_str eq "lunch") {
 			# special hack: shortcut for lunch
 			$project = $config->{lunch_project};
 			die "Error: lunch project is not defined, edit wt.conf\n" unless defined $project;
-		}
-		else {
+		} else {
 			$project = uc $project_str;
 			$project_str //= "";
-			die "Error: Invalid project name '$project_str', must be in PROJECT-NUMBER format\n" unless defined $project;
+			die "Error: Invalid project name '$project_str', must be in PROJECT-NUMBER format\n" if $project !~ /^\w+-\d+$/;
 		}
+		$project = uc $project;
 	}
-	else {
-		die "Error: project name is mandatory\n";
-	}
-	$project = uc $project;
 
 	# third argument: comment
 	# rest of @ARGV is concatenated so that quotes are not needed
-	my $comment = "@ARGV";
+	my $comment = $options->{message};
 	# special hack: no comment is required for lunch
-	$comment = "lunch" if $comment eq '' and $project_str eq "lunch";
-	die "Error: Comment is required\n" if $comment eq '';
+	$comment = "lunch" if !defined($comment) and $project_str eq "lunch";
 	# use saved comment if one is available and explicitly requested
-	$comment = $state->{current_comment} if $comment eq '-' and defined $state->{current_comment};
+	$comment = $state->{current_comment} if !defined($comment) and defined $state->{current_comment};
+	die "Error: Comment is required\n" if !defined($comment) or $comment eq '';
 	# and save current comment for future use
 	$state->{current_comment} = $comment unless $project_str eq 'lunch';
 
 	# activity may have been set by option
 	# special hack: no comment is required for lunch
+	$activity = $options->{activity};
+	$activity = $state->{current_activity} if (!defined($options->{activity}));
 	$activity = "Break" if not defined $activity and $project_str eq "lunch";
 	$activity //= 'Dev';
 
@@ -918,7 +935,7 @@ sub add {
 	}
 
 	push @{$state->{local}}, $wtline;
-	
+
 	$state->{current_project} = $project unless $project_str eq 'lunch';
 	$state->{start_mark} = { t => $end_time, d => $date };
 
@@ -983,8 +1000,10 @@ sub load_config {
 	die "Can't load config file $_[0]\n" unless $config;
 	die "Missing key from config file: jira_base_url\n" unless defined $config->{jira_base_url};
 	die "Missing key from config file: user_name\n" unless defined $config->{user_name};
-	$config->{worklog_url} //= "/rest/tempo-timesheets/3/worklogs/";
-	$config->{search_url}  //= "/rest/api/2/search";
+	$config->{worklog_url} //=
+		"/rest/tempo-timesheets/3/worklogs/";
+	$config->{search_url}  //=
+		"/rest/api/2/search";
 
 	return $config;
 }
@@ -1030,7 +1049,7 @@ sub wtline_to_jira_json {
 	my $time_spent = time_spent($wtline->{start_time}, $wtline->{end_time});
 
 	my $date_started = format_date($wtline->{date}, $wtline->{start_time});
-	
+
 	my $ojject = {
 		issue => {
 			key => uc $wtline->{project},
@@ -1045,8 +1064,8 @@ sub wtline_to_jira_json {
 			   'key' => '_Activity_'
 			 }
         ],
-		author => { 
-			name => $config->{user_name} 
+		author => {
+			name => $config->{user_name}
 		},
 	};
 
@@ -1056,12 +1075,12 @@ sub wtline_to_jira_json {
 
 sub jira_json_to_wtline {
 	my $jira = shift;
-	
+
 	my ($ds, $ts) = split 'T', $jira->{dateStarted};
 	my $date = parse_date($ds);
 	my $start_time = parse_time($ts);
 	my $end_time = increment_time($start_time, $jira->{timeSpentSeconds});
-	
+
 	return {
 		start_time => $start_time,
 		end_time   => $end_time,
@@ -1075,7 +1094,7 @@ sub jira_json_to_wtline {
 sub print_wtline {
 	my $wt = shift;
 	my $idx = shift // 'X';
-	
+
 	return join "\t",
 		$idx,
 		_print_date($wt->{date}),
@@ -1116,7 +1135,7 @@ sub update_saved_issue_summaries {
 
 sub summary {
 	my ($wt_arr, %args) = @_;
-	
+
 	my %times;
 	my $cumulative_time = 0;
 	for my $wt (@$wt_arr) {
@@ -1127,10 +1146,10 @@ sub summary {
 
 	my $summary_lines = join "", map {
 			sprintf("% 6.2f\t%s\t%s\n", ($times{$_}/3600), $_, (exists $state->{issues}{$_} ? $state->{issues}{$_} : ""))
-		} 
-		sort { 
-			$times{$b} <=> $times{$a} 
-		} 
+		}
+		sort {
+			$times{$b} <=> $times{$a}
+		}
 		keys %times;
 
 	my $cumulative_hours = $cumulative_time/3600;
@@ -1234,7 +1253,11 @@ sub _current_project {
 	my $comment = defined $state->{current_comment} && defined $state->{current_project} ?
 						"\t($state->{current_comment})" :
 						"";
-	return join "", $on_project, $project_summary, $comment;
+	my $activity = defined $state->{current_activity} && defined $state->{current_project} ?
+						"\t[$state->{current_activity}]" :
+						"";
+
+	return join "", $on_project, $project_summary, $comment, $activity;
 }
 
 sub _handle_jira_error {
@@ -1271,26 +1294,26 @@ sub _print_time {
 sub _wt2tfe {
 	my ($t, $d) = @_;
 	return timelocal(
-		$t->{S}, $t->{M},   $t->{H}, 
+		$t->{S}, $t->{M},   $t->{H},
 		$d->{D}, $d->{M}-1, $d->{Y}
 	);
 }
 
 sub check_overlap {
 	my $new = shift;
-	
+
 	my $new_start = _wt2tfe($new->{start_time}, $new->{date});
 	my $new_end   = _wt2tfe($new->{end_time},   $new->{date});
-	
+
 	my $i = 1;
 	for my $wt (@{$state->{local}}) {
 		my $wt_start = _wt2tfe($wt->{start_time}, $wt->{date});
 		my $wt_end   = _wt2tfe($wt->{end_time},   $wt->{date});
-		
+
 		return $i unless (($new_start <= $wt_end and $new_end <= $wt_start) or ($new_start >= $wt_end and $new_end >= $wt_start));
 		$i++;
 	}
-	
+
 	return 0;
 }
 
@@ -1300,7 +1323,7 @@ sub _get_month_start_end {
 	my $today = parse_date($date_str);
 	my $start = { %$today }; # deep copy
 	my $end   = { %$today };
-	
+
 	$start->{D} = 1;
 	$end->{D} = [undef, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]->[ $today->{M} ];
 	if ($end->{M} == 2 and ($end->{Y} % 400 == 0 or ($end->{Y} % 100 != 0 and $end->{Y} % 4 == 0))) {
@@ -1345,7 +1368,7 @@ sub parse_date {
 
 	my @lt = localtime(time);
 	my $date = {Y => $lt[5]+1900, M => $lt[4]+1, D => $lt[3]};
-	
+
 	if (defined $dstr and $dstr) {
 		if ($dstr =~ /^ \d\d? $/x) {
 			$date->{D} = 0+$dstr;
@@ -1457,7 +1480,7 @@ sub time_spent {
 
 	my $e = $end->{H}   * 3600 + $end->{M}   * 60 + $end->{S};
 	my $s = $start->{H} * 3600 + $start->{M} * 60 + $start->{S};
-	
+
 	if (exists $args{noabs}) {
 		return $e - $s;
 	}
@@ -1478,7 +1501,7 @@ sub _tomorrow {
 
 sub increment_time {
 	my ($start, $increment) = @_;
-	
+
 	my $t = $start->{H} * 3600 + $start->{M} * 60 + $start->{S};
 	$t += $increment;
 	$t = 86400 if $t > 86400; # FIXME
