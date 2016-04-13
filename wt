@@ -1392,6 +1392,11 @@ sub parse_time {
 			$time->{M} = int($2 * 6 + 0.5); # * 60 / 10
 			$time->{S} = 0;
 		}
+		elsif ($is_interval and $dstr =~ /^ (\d\d?) \.? (\d*) h $/x) {
+			$time->{H} = 0+$1;
+			$time->{M} = int($2 * 6 + 0.5); # * 60 / 10
+			$time->{S} = 0;
+		}
 		elsif ($is_interval and $dstr =~ /^ (\d+) m $/x) {
 			my $m = 0+$1;
 			$time->{H} = int($m / 60);
