@@ -64,10 +64,11 @@ just a single dash in certain cases, meaning
 
 Alternatively, a relative interval may be specified with a C<+> (plus sign)
 and a time specifier (B<HH:MM:SS>). Minutes and seconds may be omitted.
-Fractional hours may also be specified. A C<m> suffix means minutes.
+Fractional hours may also be specified, and a C<h> suffix may be added.
+A C<m> suffix means minutes instead.
 
 	+HH[:MM[:SS]]
-	+HH.H
+	+HH.H[h]
 	+MMm
 
 Starting time is taken from the start mark. The command fails if there
