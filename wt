@@ -424,6 +424,7 @@ use Getopt::Long;
 use Encode::Locale;
 use Encode;
 use Carp;
+use Storable qw/dclone/;
 
 # keyring support is optional, will be enabled only
 # if the module is installed
@@ -602,6 +603,10 @@ sub rm {
 				$state->{current_project} = $state->{local}[-1]{project};
 				$state->{start_mark} = { t => $state->{local}[-1]{end_time}, d => $state->{local}[-1]{date} };
 			}
+			# or try to restore explicit 'wt start' mark
+			elsif (defined $state->{explicit_start_mark}) {
+				$state->{start_mark} = dclone $state->{explicit_start_mark};
+			}
 		}
 		save_state($state_fn, $state); 
 		list_local();
@@ -617,6 +622,7 @@ sub set_mark {
 
 	unless ($change) {
 		$state->{start_mark} = { t => parse_time(undef), d => parse_date(undef) };
+		$state->{explicit_start_mark} = { t => parse_time(undef), d => parse_date(undef) };
 	}
 
 	my $project_str = shift @ARGV;
