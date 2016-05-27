@@ -687,9 +687,13 @@ sub query {
 			}
 			($start_date, $end_date) = _get_month_start_end($end_date_str);
 		}
-		#elsif ($start_date_str eq 'week') {
-		#	TODO
-		#}
+		elsif ($start_date_str eq 'week') {
+			$report_month_mode = 'current_week';
+			if (defined $end_date_str) {
+				$report_month_mode = 'historic';
+			}
+			($start_date, $end_date) = _get_week_start_end($end_date_str);
+		}
 		elsif ($start_date_str eq 'yesterday') {
 			if (defined $end_date_str and not defined $project) {
 				$project = $end_date_str;
@@ -1171,6 +1175,17 @@ sub summary {
 							$estimated_till_end_month,
 							$required_till_end_month;
 		},
+		'current_week' => sub {
+			my $today = parse_date();
+			my ($start_week, $end_week)  = _get_week_start_end();
+			my $required_till_now        = _estimate_required_workday_hours($start_week, $today);
+			my $required_till_end_week   = _estimate_required_workday_hours($start_week, $end_week);
+			my $estimated_till_end_week  = $required_till_end_week - $required_till_now + $cumulative_hours;
+			return sprintf "/%.2f required, % 6.2f/%.2f estimated at the end of the week",
+							$required_till_now,
+							$estimated_till_end_week,
+							$required_till_end_week;
+		},
 		'historic' => sub {
 			my ($start_month, $end_month) = _get_month_start_end();
 			my $required_till_end_month  = _estimate_required_workday_hours(
@@ -1309,6 +1324,25 @@ sub check_overlap {
 	}
 	
 	return 0;
+}
+
+sub _get_week_start_end {
+	my $date_str = shift;
+	my $dt;
+	if (defined $date_str) {
+		# assumed to be a regular [[YYYY]-MM]-DD date string
+		my $date = parse_date($date_str);
+		$dt = DateTime->new(year => $date->{Y}, month => $date->{M}, day => $date->{D});
+	}
+	else {
+		$dt = DateTime->now();
+	}
+	my $dow = $dt->day_of_week();
+	$dt->subtract( days => ( $dow + 6 ) % 7 ); # Monday of the week
+	my $start = {Y => $dt->year(), M => $dt->month(), D => $dt->day()};
+	$dt->add( days => 6 ); # Sunday of the week
+	my $end   = {Y => $dt->year(), M => $dt->month(), D => $dt->day()};
+	return $start, $end;
 }
 
 # get the first and last day of the current month (leap years accounted for)
