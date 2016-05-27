@@ -687,6 +687,16 @@ sub query {
 			}
 			($start_date, $end_date) = _get_month_start_end($end_date_str);
 		}
+		#elsif ($start_date_str eq 'week') {
+		#	TODO
+		#}
+		elsif ($start_date_str eq 'yesterday') {
+			if (defined $end_date_str and not defined $project) {
+				$project = $end_date_str;
+			}
+			$end_date = $start_date = _yesterday();
+			$report_month_mode = 'custom_interval';
+		}
 		else {
 			$start_date_str = undef if $start_date_str eq 'today';
 			$start_date = parse_date($start_date_str);
