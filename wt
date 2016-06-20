@@ -518,15 +518,8 @@ sub help {
 
 sub list_local {
 	my $i = 1;
-	for my $wt (
-		map {$_->[1]}
-		sort { $a->[0] cmp $b->[0] }
-		map { [(join "\t",
-			_print_date($_->{date}),
-			_print_time($_->{start_time}),
-			_print_time($_->{end_time}) ), $_] }
-		@{$state->{local}}) {
-			print print_wtline($wt, $i++);
+	for my $wt (@{$state->{local}}) {
+		print print_wtline($wt, $i++);
 	}
 	if (@{$state->{local}}) {
 		say "";
@@ -946,7 +939,8 @@ sub add {
 	}
 
 	push @{$state->{local}}, $wtline;
-	
+	_sort_local_wtlines();
+
 	$state->{current_project} = $project unless $project_str eq 'lunch';
 	$state->{start_mark} = { t => $end_time, d => $date };
 
@@ -960,6 +954,18 @@ sub add {
 }
 
 ###############
+
+sub _sort_local_wtlines {
+	$state->{local} = [
+		map {$_->[1]}
+		sort { $a->[0] cmp $b->[0] }
+		map { [(join "\t",
+			_print_date($_->{date}),
+			_print_time($_->{start_time}),
+			_print_time($_->{end_time}) ), $_] }
+		@{$state->{local}}
+	];
+}
 
 sub _rm_one_remote {
 	my $idx = shift;
