@@ -1,0 +1,9 @@
+{
+	"jira_base_url": "https://my.awesome.company.com/jira",
+	"worklog_url": "/rest/tempo-timesheets/3/worklogs/",
+	"search_url": "/rest/api/2/search",
+	"user_name": "homer.simpson",
+	"lunch_project": "CMPS-19",
+	"holidays": ["01-01", "03-14", "03-15", "03-28", "05-01", "05-16", "08-20", "10-23", "10-31", "11-01", "12-24", "12-25", "12-26"],
+	"workdays": ["03-05", "10-15"]
+}
