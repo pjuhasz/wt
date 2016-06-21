@@ -365,13 +365,15 @@ Disables checking for overlapping time intervals in C<wt add>. Boolean key.
 
 An array of dates of fixed holidays that affect estimation of remaining 
 working time for C<wt report month>.
-Dates must be in MM-DD format.
+Dates must be either in YYYY-MM-DD format (for non-fixed holidays like Easter
+or government-issued special holidays that only occur in a specific year),
+or in MM-DD format (for fixed holidays that apply to every year).
 
 =item workdays
 
 An array of dates that should count as workdays (despite falling on Saturday or Sunday).
 This also affects estimation of remaining working time.
-Dates must be in MM-DD format.
+Dates must be in YYYY-MM-DD or MM-DD format (like above).
 
 =back
 
@@ -452,15 +454,8 @@ my $state  = load_state($state_fn);
 my $ret = 0;
 
 # precalculate workday and holiday hashes
-my %holidays;
-if (exists $config->{holidays} and ref $config->{holidays} eq 'ARRAY') {
-	%holidays = map { ($_ => 1) } @{$config->{holidays}};
-}
-my %workdays;
-if (exists $config->{workdays} and ref $config->{workdays} eq 'ARRAY') {
-	%workdays = map { ($_ => 1) } @{$config->{workdays}};
-}
-
+my %holidays = validate_config_date_list($config, 'holidays');
+my %workdays = validate_config_date_list($config, 'workdays');
 
 # take care of encoding for output...
 binmode STDOUT, ":encoding(UTF-8)";
@@ -990,6 +985,30 @@ sub _rm_one_remote {
 }
 
 ###############
+
+sub validate_config_date_list {
+	my ($config, $key) = @_;
+
+	my $this_year = 1900 + (localtime)[5];
+
+	my %result;
+	if (exists $config->{$key} and ref $config->{$key} eq 'ARRAY') {
+		for my $dstr (@{$config->{$key}}) {
+			if (my ($year, $month_day) = ($dstr =~ /^ (\d{4}) - (\d{1,2} - \d{1,2}) $/x)) {
+				if ($year == $this_year) {
+					$result{$month_day} = 1;
+				}
+			}
+			elsif ($dstr =~ /^ \d{1,2} - \d{1,2} $/x) {
+				$result{$dstr} = 1;
+			}
+			else {
+				die "Incorrect date specification '$dstr' in $key list in config\n";
+			}
+		}
+	}
+	return %result;
+}
 
 sub _load_json {
 	my ($fn) = @_;
