@@ -62,10 +62,11 @@ just a single dash in certain cases, meaning
 
 Alternatively, a relative interval may be specified with a C<+> (plus sign)
 and a time specifier (B<HH:MM:SS>). Minutes and seconds may be omitted.
-Fractional hours may also be specified. A C<m> suffix means minutes.
+Fractional hours may also be specified, and a C<h> suffix may be added.
+A C<m> suffix means minutes instead.
 
 	+HH[:MM[:SS]]
-	+HH.H
+	+HH.H[h]
 	+MMm
 
 Starting time is taken from the start mark. The command fails if there
@@ -159,7 +160,8 @@ reset the timestamp.
 
 =head2 REPORT
 
-    wt report [month [DATE] | START [END] [ISSUE]]
+    wt report [today | yesterday | week [DATE] | month [DATE]]
+    wt report START [END] [ISSUE]]
     wt r ...
 
 Queries worklog entries from JIRA.
@@ -167,6 +169,7 @@ If this subcommand is called with two date arguments, worklog entries between th
 are queried from JIRA. Dates must be specified as YYYY-MM-DD.
 If the year or month is omitted, the current year or month is substituted.
 C<today> can be used to mean the current date.
+C<yesterday> can also be used with the expected meaning.
 
 The end date may be omitted altogether, in which case the current date is assumed.
 
@@ -180,6 +183,11 @@ working days (Monday to Friday).
 
 An optional second argument after C<month> in the format of YYYY-MM or MM
 causes worklogs from the specified month to be queried instead of the current month.
+
+If the first argument is C<week>, the effect is similar to that of C<month>,
+expect worklogs between the start and end of the current week are queried.
+An optional second argument can be given to C<week> too, but note that it
+will be parsed as a regular [[YYYY]-MM]-DD date string.
 
 If C<wt report> is called without any arguments, it prints the
 results of the last query (but doesn't send a new query to JIRA).
