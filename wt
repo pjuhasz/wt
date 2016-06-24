@@ -125,12 +125,13 @@ rejected. This switch can be used to disable this check
 
 =head3 Lunch and breaks
 
-Specifying "lunch" as the issue name will cause the following:
+Specifying C<lunch> or C<break> as the issue name will cause the following:
 
 =over
 
 =item The project name will be substituted from the "lunch-project" key in 
-wt.conf. If that key doesn't exist, the program terminates with an error.
+wt.conf. If that key doesn't exist, or the value is empty, 
+lunch breaks will not be committed, they will be silently dropped instead.
 
 =item The comment becomes optional, if omitted, "lunch" will be substituted.
 
@@ -647,22 +648,26 @@ sub commit {
 	my $worklog_url = $config->{jira_base_url}.$config->{worklog_url};
 
 	for my $wtline (@{$state->{local}}) {
-		my $response = connect_to_jira(
-			url     => $worklog_url,
-			content => wtline_to_jira_json($wtline),
-			pw      => $pw,
-		);
+		if (not $wtline->{no_commit}) {
+			my $response = connect_to_jira(
+				url     => $worklog_url,
+				content => wtline_to_jira_json($wtline),
+				pw      => $pw,
+			);
 
-		if ( $response->is_success() ) {
-			# mark locally stored wt line if commit was successful
-			$wtline->{committed} = 1;
-		}
-		else {
-			_handle_jira_error($response);
+			if ( $response->is_success() ) {
+				# mark locally stored wt line if commit was successful
+				$wtline->{committed} = 1;
+			}
+			else {
+				_handle_jira_error($response);
+			}
+
 		}
 	}
-	# delete wt lines that were successfully committed
-	$state->{local} = [ grep { not exists $_->{committed} } @{$state->{local}} ];
+	# delete wt lines that were successfully committed and those that 
+	# we don't need to commit
+	$state->{local} = [ grep { not exists $_->{committed} and not $_->{no_commit} } @{$state->{local}} ];
 
 	save_state($state_fn, $state);
 	return;
@@ -878,16 +883,19 @@ sub add {
 	# second argument: project
 	my $project_str = shift @ARGV;
 	my $project;
+	my $project_is_lunch = 0;
+	my $no_commit = 0;
 	if (defined $project_str) {
 		if ($project_str eq "-") {
 			# use saved current project
 			$project = $state->{current_project};
 			die "Error: no current project available\n" unless defined $project;
 		}
-		elsif ($project_str eq "lunch") {
+		elsif ($project_str eq "lunch" or $project_str eq "break") {
 			# special hack: shortcut for lunch
 			$project = $config->{lunch_project};
-			die "Error: lunch project is not defined, edit wt.conf\n" unless defined $project;
+			$project_is_lunch = 1;
+			$no_commit = 1 if $project eq ''; # don't commit breaks if lunch/break project is empty
 		}
 		else {
 			$project = uc $project_str;
@@ -903,17 +911,17 @@ sub add {
 	# third argument: comment
 	# rest of @ARGV is concatenated so that quotes are not needed
 	my $comment = "@ARGV";
-	# special hack: no comment is required for lunch
-	$comment = "lunch" if $comment eq '' and $project_str eq "lunch";
+	# special hack: no comment is required for lunch or break
+	$comment = $project_str if $comment eq '' and $project_is_lunch;
 	die "Error: Comment is required\n" if $comment eq '';
 	# use saved comment if one is available and explicitly requested
 	$comment = $state->{current_comment} if $comment eq '-' and defined $state->{current_comment};
 	# and save current comment for future use
-	$state->{current_comment} = $comment unless $project_str eq 'lunch';
+	$state->{current_comment} = $comment unless $project_is_lunch;
 
 	# activity may have been set by option
 	# special hack: no comment is required for lunch
-	$activity = "Break" if not defined $activity and $project_str eq "lunch";
+	$activity = "Break" if not defined $activity and $project_is_lunch;
 	$activity //= 'Dev';
 
 	# assemble ojject and save it
@@ -924,6 +932,7 @@ sub add {
 		project    => $project,
 		comment    => $comment,
 		activity   => $activity,
+		no_commit  => $no_commit,
 	};
 
 	if (not ($no_overlap_check or $config->{no_overlap_check})
@@ -1038,6 +1047,7 @@ sub load_config {
 	die "Missing key from config file: user_name\n" unless defined $config->{user_name};
 	$config->{worklog_url} //= "/rest/tempo-timesheets/3/worklogs/";
 	$config->{search_url}  //= "/rest/api/2/search";
+	$config->{lunch_project} //= '';
 
 	return $config;
 }
