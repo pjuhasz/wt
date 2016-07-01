@@ -17,6 +17,7 @@ Available subcommands:
     wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
+    wt undo
     wt
     wt help [SUBCOMMAND]
 
@@ -263,6 +264,18 @@ If called with just an alias but without a definition, that alias is deleted.
 
 If called without any parameters, the list of all defined aliases is printed.
 
+=head2 UNDO
+
+    wt undo
+
+Undoes the effect of the last C<wt add> or C<wt rm> command. 
+
+This subcommand only touches (or more precisely, restores) the local
+wt entry list, so entries already committed are not affected.
+In other words, C<wt commit> cannot be undone.
+
+There is only one level of undo.
+
 =head2 HELP
 
     wt help [SUBCOMMAND]
@@ -482,6 +495,7 @@ for ($action) {
 	when ([qw/start  s/ ]) { set_mark();   }
 	when ([qw/commit ci/]) { commit();     }
 	when ([qw/report r/])  { query();      }
+	when ([qw/undo u/ ])   { undo();       }
 	when ([qw/help h/])    { help();       }
 	when ([qw/add a/])     { add();        }
 	when ("rm")            { rm();         }
@@ -503,6 +517,7 @@ sub help {
 		when ([qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"}); }
 		when ([qw/issues :/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ISSUES"}); }
 		when ([qw/report r/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}); }
+		when ([qw/undo u/ ])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/UNDO" });  }
 		when ([qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
 		when ([qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
 		when ("rm")            { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/RM"});     }
@@ -556,6 +571,17 @@ sub set_alias {
 	return;
 }
 
+sub undo {
+	$state->{local} = dclone $state->{saved_local} if exists $state->{saved_local};
+
+	$state->{current_project} = $state->{saved_current_project} if exists $state->{saved_current_project};
+	$state->{current_comment} = $state->{saved_current_comment} if exists $state->{saved_current_comment};
+
+	save_state($state_fn, $state);
+	list_local();
+	return;
+}
+
 sub rm {
 	my $remote = 0;
 	GetOptions(
@@ -584,6 +610,8 @@ sub rm {
 	else {
 		die "Error: specify the index of local wt record to be deleted\n" unless $idx;
 		die "Error: no local wt records to delete\n" unless scalar @{$state->{local}};
+
+		$state->{saved_local} = dclone $state->{local};
 
 		if ($idx eq "all") {
 			$state->{local} = [];
@@ -916,8 +944,7 @@ sub add {
 	die "Error: Comment is required\n" if $comment eq '';
 	# use saved comment if one is available and explicitly requested
 	$comment = $state->{current_comment} if $comment eq '-' and defined $state->{current_comment};
-	# and save current comment for future use
-	$state->{current_comment} = $comment unless $project_is_lunch;
+	# and save current comment for future use... in the end, when we can change state safely
 
 	# activity may have been set by option
 	# special hack: no comment is required for lunch
@@ -942,10 +969,16 @@ sub add {
 			 print_wtline($wtline, undef) ."\n";
 	}
 
+	# do this as late as possible, when we're sure all input was correct
+	$state->{saved_local}           = dclone $state->{local};
+	$state->{saved_current_project} = $state->{current_project};
+	$state->{saved_current_comment} = $state->{current_comment};
+
 	push @{$state->{local}}, $wtline;
 	_sort_local_wtlines();
 
 	$state->{current_project} = $project unless $project_str eq 'lunch';
+	$state->{current_comment} = $comment unless $project_is_lunch;
 	$state->{start_mark} = { t => $end_time, d => $date };
 
 	save_state($state_fn, $state);
