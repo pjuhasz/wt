@@ -268,7 +268,7 @@ If called without any parameters, the list of all defined aliases is printed.
 
     wt undo
 
-Undoes the effect of the last C<wt add> or C<wt rm> command. 
+Undoes the effect of the last C<wt add> C<wt rm>, or C<wt start> command. 
 
 This subcommand only touches (or more precisely, restores) the local
 wt entry list, so entries already committed are not affected.
@@ -572,7 +572,8 @@ sub set_alias {
 }
 
 sub undo {
-	$state->{local} = dclone $state->{saved_local} if exists $state->{saved_local};
+	$state->{local}      = dclone $state->{saved_local}      if exists $state->{saved_local};
+	$state->{start_mark} = dclone $state->{saved_start_mark} if exists $state->{saved_start_mark};
 
 	$state->{current_project} = $state->{saved_current_project} if exists $state->{saved_current_project};
 	$state->{current_comment} = $state->{saved_current_comment} if exists $state->{saved_current_comment};
@@ -611,15 +612,16 @@ sub rm {
 		die "Error: specify the index of local wt record to be deleted\n" unless $idx;
 		die "Error: no local wt records to delete\n" unless scalar @{$state->{local}};
 
-		$state->{saved_local} = dclone $state->{local};
-
 		if ($idx eq "all") {
+			save_local_state();
 			$state->{local} = [];
 			say "All local wt records deleted!";
 		}
 		else {
 			die "Error: index must be 1..".scalar @{$state->{local}}."\n" unless $idx =~ /^\d+$/ and $idx >= 1 and $idx <= scalar @{$state->{local}};
 			# at this point we should have a valid index to delete
+			save_local_state();
+
 			splice @{$state->{local}}, $idx-1, 1;
 			
 			# update start mark to end of last entry
@@ -648,6 +650,8 @@ sub set_mark {
 		$state->{start_mark} = { t => parse_time(undef), d => parse_date(undef) };
 		$state->{explicit_start_mark} = { t => parse_time(undef), d => parse_date(undef) };
 	}
+
+	save_local_state();
 
 	my $project_str = shift @ARGV;
 	if (defined $project_str) {
@@ -970,9 +974,7 @@ sub add {
 	}
 
 	# do this as late as possible, when we're sure all input was correct
-	$state->{saved_local}           = dclone $state->{local};
-	$state->{saved_current_project} = $state->{current_project};
-	$state->{saved_current_comment} = $state->{current_comment};
+	save_local_state();
 
 	push @{$state->{local}}, $wtline;
 	_sort_local_wtlines();
@@ -1023,6 +1025,15 @@ sub _rm_one_remote {
 	else {
 		_handle_jira_error($response);
 	}
+	return;
+}
+
+sub save_local_state {
+	$state->{saved_local}           = dclone $state->{local};
+	$state->{saved_start_mark}      = dclone $state->{start_mark};
+	$state->{saved_current_project} = $state->{current_project};
+	$state->{saved_current_comment} = $state->{current_comment};
+
 	return;
 }
 
