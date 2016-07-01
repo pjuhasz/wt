@@ -15,6 +15,7 @@ Available subcommands:
     wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
+    wt undo
     wt
     wt help [SUBCOMMAND]
 
@@ -123,12 +124,13 @@ rejected. This switch can be used to disable this check
 
 =head3 Lunch and breaks
 
-Specifying "lunch" as the issue name will cause the following:
+Specifying C<lunch> or C<break> as the issue name will cause the following:
 
 =over
 
 =item The project name will be substituted from the "lunch-project" key in 
-wt.conf. If that key doesn't exist, the program terminates with an error.
+wt.conf. If that key doesn't exist, or the value is empty, 
+lunch breaks will not be committed, they will be silently dropped instead.
 
 =item The comment becomes optional, if omitted, "lunch" will be substituted.
 
@@ -260,6 +262,18 @@ If called with just an alias but without a definition, that alias is deleted.
 
 If called without any parameters, the list of all defined aliases is printed.
 
+=head2 UNDO
+
+    wt undo
+
+Undoes the effect of the last C<wt add> C<wt rm>, or C<wt start> command. 
+
+This subcommand only touches (or more precisely, restores) the local
+wt entry list, so entries already committed are not affected.
+In other words, C<wt commit> cannot be undone.
+
+There is only one level of undo.
+
 =head2 HELP
 
     wt help [SUBCOMMAND]
@@ -363,13 +377,15 @@ Disables checking for overlapping time intervals in C<wt add>. Boolean key.
 
 An array of dates of fixed holidays that affect estimation of remaining 
 working time for C<wt report month>.
-Dates must be in MM-DD format.
+Dates must be either in YYYY-MM-DD format (for non-fixed holidays like Easter
+or government-issued special holidays that only occur in a specific year),
+or in MM-DD format (for fixed holidays that apply to every year).
 
 =item workdays
 
 An array of dates that should count as workdays (despite falling on Saturday or Sunday).
 This also affects estimation of remaining working time.
-Dates must be in MM-DD format.
+Dates must be in YYYY-MM-DD or MM-DD format (like above).
 
 =back
 
