@@ -431,7 +431,7 @@ Storing the password in plaintext is not supported (nor is it recommended).
 
 use strict;
 use warnings;
-no warnings qw/experimental/;
+no if ($] >= 5.018), 'warnings' => 'experimental';
 use feature qw/say switch/;
 use Pod::Usage;
 use JSON qw/encode_json decode_json/;
