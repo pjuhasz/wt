@@ -1319,11 +1319,8 @@ sub list_remote {
 
 sub print_unlogged {
 	if (defined $state->{start_mark}) {
-		my $today = parse_date(undef);
 		my $saved = $state->{start_mark}{d};
-		if ($today->{Y} == $saved->{Y} and
-			$today->{M} == $saved->{M} and
-			$today->{D} == $saved->{D} ) {
+		if (is_today($saved)) {
 
 			my $interval = -1 * time_spent(parse_time(undef), $state->{start_mark}{t}, noabs => 1);
 			if ($interval < 0) {
@@ -1464,6 +1461,17 @@ sub _estimate_required_workday_hours {
 	}
 
 	return $sum_so_far;
+}
+
+sub is_today {
+	my ($date) = @_;
+	my $today = parse_date(undef);
+
+	return (
+		$today->{Y} == $date->{Y} &&
+		$today->{M} == $date->{M} &&
+		$today->{D} == $date->{D}
+	);
 }
 
 sub compare_dates {
