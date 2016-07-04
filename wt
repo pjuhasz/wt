@@ -12,7 +12,7 @@ Available subcommands:
 
     wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
     wt commit
-    wt start [-c] [ISSUE] [COMMENT]
+    wt start [-f] [-c] [ISSUE] [COMMENT]
     wt report [month [DATE] | START [END] [ISSUE]]
     wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
@@ -152,7 +152,7 @@ Successfully committed entries are deleted from the list.
 
 =head2 START
 
-	wt start [-c|--change] [ISSUE] [COMMENT]
+	wt start [-f|--force] [-c|--change] [ISSUE] [COMMENT]
 	wt s ...
 
 Saves a timestamp with the current time. In effect, this command means
@@ -161,6 +161,13 @@ it will be saved as the current project.
 
 The C<--change> or C<-c> option only changes the current issue, but does not
 reset the timestamp.
+
+If there is already a timestamp for the current date (in other words, you
+have already used C<wt start> today), the command will not overwrite it
+so as to prevent accidental clobbering of unlogged time. The C<-f> or
+C<--force> switch can be used in this case to enforce saving the timestamp.
+
+C<-f> and C<-c> are mutually exclusive, using them together is an error.
 
 =head2 REPORT
 
@@ -642,16 +649,23 @@ sub rm {
 
 sub set_mark {
 	my $change = 0;
+	my $force  = 0;
 	GetOptions(
 		'change!' => \$change,
+		'force!'  => \$force,
 	) or help('start');
 
-	unless ($change) {
+	die "Options -c and -f are mutually exclusive, make up your mind\n" if $force and $change;
+
+	save_local_state();
+
+	my $is_today = exists($state->{start_mark}) && is_today($state->{start_mark}{d});
+	die "There is already a timestamp for today, use --force to overwrite it\n" if not $change and not $force and $is_today;
+
+	if ($force or not ($change or $is_today)) {
 		$state->{start_mark} = { t => parse_time(undef), d => parse_date(undef) };
 		$state->{explicit_start_mark} = { t => parse_time(undef), d => parse_date(undef) };
 	}
-
-	save_local_state();
 
 	my $project_str = shift @ARGV;
 	if (defined $project_str) {
