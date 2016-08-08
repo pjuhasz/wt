@@ -1373,6 +1373,10 @@ sub _handle_jira_error {
 	if ($response->code() == 401) {
 		forget_pw();
 	}
+	elsif ($response->code() >= 500) {
+		# likely not json but some java backtrace in HTML
+		say STDERR $response->decoded_content;
+	}
 	else {
 		my $error = decode_json $response->decoded_content;
 		say STDERR join "\n",
