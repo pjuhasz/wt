@@ -1043,8 +1043,8 @@ sub _rm_one_remote {
 }
 
 sub save_local_state {
-	$state->{saved_local}           = dclone $state->{local};
-	$state->{saved_start_mark}      = dclone $state->{start_mark};
+	$state->{saved_local}           = dclone($state->{local} // []);
+	$state->{saved_start_mark}      = dclone $state->{start_mark} if defined $state->{start_mark};
 	$state->{saved_current_project} = $state->{current_project};
 	$state->{saved_current_comment} = $state->{current_comment};
 
