@@ -1332,22 +1332,26 @@ sub list_remote {
 }
 
 sub print_unlogged {
-	if (defined $state->{start_mark}) {
-		my $saved = $state->{start_mark}{d};
-		if (is_today($saved)) {
+	my $whence;
+	if (@{ $state->{local} }) {
+		$whence = $state->{local}->[-1]->{end_time};
+	}
+	elsif (defined $state->{start_mark} and is_today($state->{start_mark}{d})) {
+		$whence = $state->{start_mark}{t};
+	}
 
-			my $interval = -1 * time_spent(parse_time(undef), $state->{start_mark}{t}, noabs => 1);
-			if ($interval < 0) {
-				say "End of last local wt entry is in the future";
-			}
-			else {
-				my ($h, $m, $s);
-				$h = int($interval / 3600); $interval -= $h * 3600;
-				$m = int($interval /   60); $interval -= $m *   60;
-				$s = int($interval);
-				$interval = join ':', $h, pad($m), pad($s);
-				say "Unlogged work: ", $interval, _current_project();
-			}
+	if (defined $whence) {
+		my $interval = -1 * time_spent(parse_time(undef), $whence, noabs => 1);
+		if ($interval < 0) {
+			say "End of last local wt entry is in the future";
+		}
+		else {
+			my ($h, $m, $s);
+			$h = int($interval / 3600); $interval -= $h * 3600;
+			$m = int($interval /   60); $interval -= $m *   60;
+			$s = int($interval);
+			$interval = join ':', $h, pad($m), pad($s);
+			say "Unlogged work: ", $interval, _current_project();
 		}
 	}
 	return;
