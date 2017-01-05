@@ -1182,14 +1182,18 @@ sub jira_json_to_wtline {
 	my $date = parse_date($ds);
 	my $start_time = parse_time($ts);
 	my $end_time = increment_time($start_time, $jira->{timeSpentSeconds});
-	
+
+	my $jwlattr = $jira->{worklogAttributes};
+	my $ai = 0;
+	$jwlattr->[$_]{key} eq '_Activity_' and $ai = $_ and last for 0..$#$jwlattr;
+
 	return {
 		start_time => $start_time,
 		end_time   => $end_time,
 		date       => $date,
 		project    => $jira->{issue}{key},
 		comment    => $jira->{comment},
-		activity   => $jira->{worklogAttributes}[0]{value},
+		activity   => $jwlattr->[$ai]{value},
 	};
 }
 
