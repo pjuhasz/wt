@@ -1333,7 +1333,7 @@ sub list_remote {
 
 sub print_unlogged {
 	my $whence;
-	if (@{ $state->{local} }) {
+	if (@{ $state->{local} } and is_today($state->{local}->[-1]->{date})) {
 		$whence = $state->{local}->[-1]->{end_time};
 	}
 	elsif (defined $state->{start_mark} and is_today($state->{start_mark}{d})) {
