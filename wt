@@ -1444,7 +1444,7 @@ sub _get_week_start_end {
 		$dt = DateTime->new(year => $date->{Y}, month => $date->{M}, day => $date->{D});
 	}
 	else {
-		$dt = DateTime->now();
+		$dt = DateTime->now(time_zone => "local");
 	}
 	my $dow = $dt->day_of_week();
 	$dt->subtract( days => ( $dow + 6 ) % 7 ); # Monday of the week
@@ -1643,12 +1643,12 @@ sub time_spent {
 }
 
 sub _yesterday {
-	my $dt = DateTime->now()->subtract( days => 1 );
+	my $dt = DateTime->now(time_zone => "local")->subtract( days => 1 );
 	return {Y => $dt->year(), M => $dt->month(), D => $dt->day()};
 }
 
 sub _tomorrow {
-	my $dt = DateTime->now()->add( days => 1 );
+	my $dt = DateTime->now(time_zone => "local")->add( days => 1 );
 	return {Y => $dt->year(), M => $dt->month(), D => $dt->day()};
 }
 
