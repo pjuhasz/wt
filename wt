@@ -171,7 +171,7 @@ C<-f> and C<-c> are mutually exclusive, using them together is an error.
 
 =head2 REPORT
 
-    wt report [today | yesterday | week [DATE] | month [DATE]]
+    wt report [today | yesterday | week [DATE|last] | month [DATE|last]]
     wt report START [END] [ISSUE]]
     wt r ...
 
@@ -194,11 +194,16 @@ working days (Monday to Friday).
 
 An optional second argument after C<month> in the format of YYYY-MM or MM
 causes worklogs from the specified month to be queried instead of the current month.
+As a special case, this second argument can be C<last>, which queries
+worklogs from the month preceding the current month.
 
 If the first argument is C<week>, the effect is similar to that of C<month>,
 expect worklogs between the start and end of the current week are queried.
 An optional second argument can be given to C<week> too, but note that it
-will be parsed as a regular [[YYYY]-MM]-DD date string.
+will be parsed as a regular [[YYYY]-MM]-DD date string, so a single number
+will be interpreted as the day in the current month, and this will query
+worklogs from the week that contain the specified day. As a special case,
+this second argument can be C<last>, which queries worklogs from last week.
 
 If C<wt report> is called without any arguments, it prints the
 results of the last query (but doesn't send a new query to JIRA).
@@ -728,7 +733,9 @@ sub query {
 		if ($start_date_str eq 'month') {
 			$report_month_mode = 'current';
 			if (defined $end_date_str) {
-				$end_date_str .= '-1'; # kludge to add fake day part to YYYY-MM input to be able to use parse_date
+				if ($end_date_str ne 'last') {
+					$end_date_str .= '-1'; # kludge to add fake day part to YYYY-MM input to be able to use parse_date
+				}
 				$report_month_mode = 'historic';
 			}
 			($start_date, $end_date) = _get_month_start_end($end_date_str);
@@ -1438,7 +1445,11 @@ sub check_overlap {
 sub _get_week_start_end {
 	my $date_str = shift;
 	my $dt;
-	if (defined $date_str) {
+	if (defined $date_str and $date_str eq 'last') {
+		$dt = DateTime->now(time_zone => "local");
+		$dt->subtract( days => 7);
+	}
+	elsif (defined $date_str) {
 		# assumed to be a regular [[YYYY]-MM]-DD date string
 		my $date = parse_date($date_str);
 		$dt = DateTime->new(year => $date->{Y}, month => $date->{M}, day => $date->{D});
@@ -1457,15 +1468,24 @@ sub _get_week_start_end {
 # get the first and last day of the current month (leap years accounted for)
 sub _get_month_start_end {
 	my $date_str = shift;
-	my $today = parse_date($date_str);
-	my $start = { %$today }; # deep copy
-	my $end   = { %$today };
-	
-	$start->{D} = 1;
-	$end->{D} = [undef, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]->[ $today->{M} ];
-	if ($end->{M} == 2 and ($end->{Y} % 400 == 0 or ($end->{Y} % 100 != 0 and $end->{Y} % 4 == 0))) {
-		$end->{D} = 29;
+	my ($dt, $start);
+	if (defined $date_str and $date_str eq 'last') {
+		$dt = DateTime->now(time_zone => "local");
+		$dt->subtract(months => 1);
+		$start = { Y => $dt->year, M => $dt->month, D => 1 };
+	} else {
+		$start = parse_date($date_str);
+		$start->{D} = 1;
+		$dt = DateTime->new(year => $start->{Y}, month => $start->{M}, day => 1);
 	}
+
+	my $last_day = DateTime->last_day_of_month(
+		month => $dt->month,
+		year  => $dt->year,
+	)->day;
+
+	my $end = { %$start, D => $last_day };
+
 	return $start, $end;
 }
 
