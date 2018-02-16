@@ -13,7 +13,7 @@ Available subcommands:
     wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
     wt commit
     wt start [-f] [-c] [ISSUE] [COMMENT]
-    wt report [month [DATE] | START [END] [ISSUE]]
+    wt report [-u USER] [RELATIVE-DATESPEC | START [END] [ISSUE]]
     wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
@@ -171,8 +171,9 @@ C<-f> and C<-c> are mutually exclusive, using them together is an error.
 
 =head2 REPORT
 
+    wt report [-u|--user USER]
     wt report [today | yesterday | week [DATE|last] | month [DATE|last]]
-    wt report START [END] [ISSUE]]
+    wt report START [END] [ISSUE]
     wt r ...
 
 Queries worklog entries from JIRA.
@@ -186,7 +187,10 @@ The end date may be omitted altogether, in which case the current date is assume
 
 An optional third argument can be used to filter for project name.
 
-Alternatively, if the first argument is C<month>, worklog entries between
+Alternatively, certain magic relative date specifiers can be used in place
+of an explicit date string in the first argument.
+
+If the first argument is C<month>, worklog entries between
 the start and end of the current month are queried. In this mode the
 reported sum of logged hours is amended with a projection for the remainder
 of the month, assuming that the user will log 8 hours for the remaining
@@ -207,6 +211,11 @@ this second argument can be C<last>, which queries worklogs from last week.
 
 If C<wt report> is called without any arguments, it prints the
 results of the last query (but doesn't send a new query to JIRA).
+
+By default, C<wt report> queries your own worklogs.
+The C<-u> or C<--user> switch can be used to query someone else's worklogs.
+This will only work if you have the appropriate rights in JIRA
+(the target user is in your team).
 
 =head2 ISSUES
 
@@ -725,8 +734,13 @@ sub commit {
 }
 
 sub query {
+	my $target_user = $config->{user_name};
+	GetOptions(
+		'user=s' => \$target_user,
+	) or help('report');
+
 	my ($start_date_str, $end_date_str, $project) = @ARGV;
-	
+
 	if (defined $start_date_str) {
 		my ($start_date, $end_date, $report_month_mode);
 
@@ -763,7 +777,7 @@ sub query {
 			$report_month_mode = 'custom_interval';
 		}
 
-		my %query_hash = (dateFrom => _print_date($start_date), dateTo => _print_date($end_date), username => $config->{user_name});
+		my %query_hash = (dateFrom => _print_date($start_date), dateTo => _print_date($end_date), username => $target_user);
 		$query_hash{projectKey} = $project if defined $project;
 		my $query_string = uri_escape_hash(%query_hash);
 
