@@ -10,8 +10,8 @@ Available subcommands:
 
     wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
     wt commit
-    wt start [-c] [ISSUE] [COMMENT]
-    wt report [month [DATE] | START [END] [ISSUE]]
+    wt start [-f] [-c] [ISSUE] [COMMENT]
+    wt report [-u USER] [RELATIVE-DATESPEC | START [END] [ISSUE]]
     wt rm [-r] INDEX|all
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
@@ -150,7 +150,7 @@ Successfully committed entries are deleted from the list.
 
 =head2 START
 
-	wt start [-c|--change] [ISSUE] [COMMENT]
+	wt start [-f|--force] [-c|--change] [ISSUE] [COMMENT]
 	wt s ...
 
 Saves a timestamp with the current time. In effect, this command means
@@ -160,10 +160,18 @@ it will be saved as the current project.
 The C<--change> or C<-c> option only changes the current issue, but does not
 reset the timestamp.
 
+If there is already a timestamp for the current date (in other words, you
+have already used C<wt start> today), the command will not overwrite it
+so as to prevent accidental clobbering of unlogged time. The C<-f> or
+C<--force> switch can be used in this case to enforce saving the timestamp.
+
+C<-f> and C<-c> are mutually exclusive, using them together is an error.
+
 =head2 REPORT
 
-    wt report [today | yesterday | week [DATE] | month [DATE]]
-    wt report START [END] [ISSUE]]
+    wt report [-u|--user USER]
+    wt report [today | yesterday | week [DATE|last] | month [DATE|last]]
+    wt report START [END] [ISSUE]
     wt r ...
 
 Queries worklog entries from JIRA.
@@ -177,7 +185,10 @@ The end date may be omitted altogether, in which case the current date is assume
 
 An optional third argument can be used to filter for project name.
 
-Alternatively, if the first argument is C<month>, worklog entries between
+Alternatively, certain magic relative date specifiers can be used in place
+of an explicit date string in the first argument.
+
+If the first argument is C<month>, worklog entries between
 the start and end of the current month are queried. In this mode the
 reported sum of logged hours is amended with a projection for the remainder
 of the month, assuming that the user will log 8 hours for the remaining
@@ -185,14 +196,24 @@ working days (Monday to Friday).
 
 An optional second argument after C<month> in the format of YYYY-MM or MM
 causes worklogs from the specified month to be queried instead of the current month.
+As a special case, this second argument can be C<last>, which queries
+worklogs from the month preceding the current month.
 
 If the first argument is C<week>, the effect is similar to that of C<month>,
 expect worklogs between the start and end of the current week are queried.
 An optional second argument can be given to C<week> too, but note that it
-will be parsed as a regular [[YYYY]-MM]-DD date string.
+will be parsed as a regular [[YYYY]-MM]-DD date string, so a single number
+will be interpreted as the day in the current month, and this will query
+worklogs from the week that contain the specified day. As a special case,
+this second argument can be C<last>, which queries worklogs from last week.
 
 If C<wt report> is called without any arguments, it prints the
 results of the last query (but doesn't send a new query to JIRA).
+
+By default, C<wt report> queries your own worklogs.
+The C<-u> or C<--user> switch can be used to query someone else's worklogs.
+This will only work if you have the appropriate rights in JIRA
+(the target user is in your team).
 
 =head2 ISSUES
 
