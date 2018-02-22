@@ -734,7 +734,7 @@ sub commit {
 }
 
 sub query {
-	my $target_user = $config->{user_name};
+	my $target_user;
 	GetOptions(
 		'user=s' => \$target_user,
 	) or help('report');
@@ -777,8 +777,14 @@ sub query {
 			$report_month_mode = 'custom_interval';
 		}
 
-		my %query_hash = (dateFrom => _print_date($start_date), dateTo => _print_date($end_date), username => $target_user);
+		my %query_hash = (dateFrom => _print_date($start_date), dateTo => _print_date($end_date));
 		$query_hash{projectKey} = $project if defined $project;
+		if (defined $target_user) {
+			# XXX :( for some reason querying $target_user doesn't work directly, I have to query for all team members then filter
+			$query_hash{teamId} = $config->{teamId} // 7; # XXX hardcoded id :(
+		} else {
+			$query_hash{username} = $config->{user_name};
+		}
 		my $query_string = uri_escape_hash(%query_hash);
 
 		my $response = connect_to_jira(
@@ -796,7 +802,8 @@ sub query {
 				on_error     => "No worklog records in the specified date range.",
 				report_month => $report_month_mode,
 				start_date   => $start_date,
-				end_date     => $end_date);
+				end_date     => $end_date,
+				filter_user  => $target_user);
 
 			save_state($state_fn, $state);
 		}
@@ -1342,6 +1349,7 @@ sub list_remote {
 	my %args = @_;
 	my $i = 1;
 	my @remote = @{$state->{remote}};
+	@remote = grep { $_->{author}->{name} eq $args{filter_user} } @remote if defined $args{filter_user};
 	for my $csira (@remote) {
 		print print_wtline(jira_json_to_wtline($csira), $i++);
 	}
