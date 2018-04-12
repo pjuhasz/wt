@@ -871,10 +871,10 @@ sub get_issues {
 	if ( $response->is_success() ) {
 		my $raw_data = decode_json $response->decoded_content;
 		say for reverse map { 
-				sprintf "%-8s%-16s%-16s%s", 
+				sprintf "%-12s%-16s%-16s%s", 
 					$_->{key}, 
 					_trunc($_->{fields}{status}{name}, 15), 
-					$_->{fields}{assignee}{name} // "", 
+					$_->{fields}{assignee}{name} // "-", 
 					$_->{fields}{summary}
 				} 
 			@{$raw_data->{issues}};
