@@ -1345,6 +1345,44 @@ sub summary {
 	return $res_str;
 }
 
+sub sparkline {
+	my ($wt_arr, $mode) = @_;
+	my @l = (' ', map chr 0x2580+$_, 1..8); ##▁▂▃▄▅▆▇█
+	my @w = qw/m t w T f s S/;
+	my (@lines, @daily_sums);
+	for my $wt (@$wt_arr) {
+		my $d = $wt->{date}->{D};
+		my $t = time_spent($wt->{start_time}, $wt->{end_time});
+		$daily_sums[$d] += $t;
+	}
+	my ($start, $end);
+	if ($mode eq 'current' or $mode eq 'historic') {
+		($start, $end) = _get_month_start_end($wt_arr->[0]->{date});
+	} elsif ($mode eq 'current_week') {
+		($start, $end) = _get_week_start_end($wt_arr->[0]->{date});
+	} else {
+		return;
+	}
+
+	my $dow = DateTime->new(year => $start->{Y}, month => $start->{M}, day => $start->{D})->day_of_week();
+	$dow--;
+	$lines[1][0] = $lines[0][0] = chr 0x259e;
+	$lines[$_][0] = ' ' for 2..4;
+	for my $d ($start->{D} .. $end->{D}) {
+		my $s = $daily_sums[$d] // 0;
+		$s /= 3600;
+		push @{$lines[0]}, $l[ $s <  8 ? 0 : $s - 8]; # overtime
+		push @{$lines[1]}, $l[ $s >= 8 ? 8 : $s    ]; # core time
+		push @{$lines[2]}, $w[$dow++]; $dow %= 7;     # day of week
+		push @{$lines[3]}, int($d / 10);              # digits of date
+		push @{$lines[4]}, $d % 10;
+	}
+	push @{$lines[0]}, chr 0x259a;
+	push @{$lines[1]}, chr 0x259a;
+	local $" = '';
+	return join "\n", map "@$_", @lines;
+}
+
 sub list_remote {
 	my %args = @_;
 	my $i = 1;
@@ -1354,8 +1392,10 @@ sub list_remote {
 		print print_wtline(jira_json_to_wtline($csira), $i++);
 	}
 	if (@remote) {
+		my $wt_arr = [ map {jira_json_to_wtline($_)} @remote ];
+		say sparkline($wt_arr, $args{report_month});
 		say "";
-		say summary([ map {jira_json_to_wtline($_)} @remote ], %args);
+		say summary($wt_arr, %args);
 	}
 	else {
 		say $args{on_error};
@@ -1472,8 +1512,13 @@ sub _get_week_start_end {
 		$dt->subtract( days => 7);
 	}
 	elsif (defined $date_str) {
-		# assumed to be a regular [[YYYY]-MM]-DD date string
-		my $date = parse_date($date_str);
+		my $date;
+		if (ref $date_str eq 'HASH') {
+			$date = $date_str;
+		} else {
+			# assumed to be a regular [[YYYY]-MM]-DD date string
+			$date = parse_date($date_str);
+		}
 		$dt = DateTime->new(year => $date->{Y}, month => $date->{M}, day => $date->{D});
 	}
 	else {
@@ -1496,7 +1541,11 @@ sub _get_month_start_end {
 		$dt->subtract(months => 1);
 		$start = { Y => $dt->year, M => $dt->month, D => 1 };
 	} else {
-		$start = parse_date($date_str);
+		if (ref $date_str eq 'HASH') {
+			$start = $date_str;
+		} else {
+			$start = parse_date($date_str);
+		}
 		$start->{D} = 1;
 		$dt = DateTime->new(year => $start->{Y}, month => $start->{M}, day => 1);
 	}
