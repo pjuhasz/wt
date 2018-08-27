@@ -1349,27 +1349,29 @@ sub sparkline {
 	my ($wt_arr, $mode) = @_;
 	my @l = (' ', map chr 0x2580+$_, 1..8); ##▁▂▃▄▅▆▇█
 	my @w = qw/m t w T f s S/;
-	my (@lines, @daily_sums);
+	my (@lines, %daily_sums);
 	for my $wt (@$wt_arr) {
-		my $d = $wt->{date}->{D};
+		my $d = _print_date($wt->{date});
 		my $t = time_spent($wt->{start_time}, $wt->{end_time});
-		$daily_sums[$d] += $t;
+		$daily_sums{$d} += $t;
 	}
 	my ($start, $end);
-	if ($mode eq 'current' or $mode eq 'historic') {
+	if ($mode eq 'current') {
 		($start, $end) = _get_month_start_end($wt_arr->[0]->{date});
 	} elsif ($mode eq 'current_week') {
 		($start, $end) = _get_week_start_end($wt_arr->[0]->{date});
 	} else {
-		return;
+		($start, $end) = ($wt_arr->[0]->{date}, $wt_arr->[-1]->{date});
 	}
 
 	my $dow = DateTime->new(year => $start->{Y}, month => $start->{M}, day => $start->{D})->day_of_week();
 	$dow--;
 	$lines[1][0] = $lines[0][0] = chr 0x259e;
 	$lines[$_][0] = ' ' for 2..4;
-	for my $d ($start->{D} .. $end->{D}) {
-		my $s = $daily_sums[$d] // 0;
+	for my $dx (_generate_date_range($start, $end)) {
+		my $ds = _print_date($dx);
+		my $d = $dx->{D};
+		my $s = $daily_sums{$ds} // 0;
 		$s /= 3600;
 		push @{$lines[0]}, $l[ $s <  8 ? 0 : $s - 8]; # overtime
 		push @{$lines[1]}, $l[ $s >= 8 ? 8 : $s    ]; # core time
@@ -1502,6 +1504,28 @@ sub check_overlap {
 	}
 	
 	return 0;
+}
+
+sub _generate_date_range {
+	my ($start, $end) = @_;
+	my $compare = compare_dates($start, $end);
+
+	if ($compare == 0) {
+		return ($start, $end);
+	} elsif ($compare > 0) {
+		($start, $end) = ($end, $start);
+	}
+
+	my @res;
+	push @res, $start;
+	my $date = {%$start};
+	do {
+		my $dt = DateTime->new(year => $date->{Y}, month => $date->{M}, day => $date->{D});
+		$dt->add( days => 1 );
+		$date = {Y => $dt->year(), M => $dt->month(), D => $dt->day()};
+		push @res, $date;
+	} while (compare_dates($date, $end) < 0);
+	return @res;
 }
 
 sub _get_week_start_end {
