@@ -1511,7 +1511,7 @@ sub _generate_date_range {
 	my $compare = compare_dates($start, $end);
 
 	if ($compare == 0) {
-		return ($start, $end);
+		return ($start);
 	} elsif ($compare > 0) {
 		($start, $end) = ($end, $start);
 	}
