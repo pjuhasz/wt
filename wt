@@ -1672,17 +1672,14 @@ sub parse_time {
 			$is_interval = 1;
 		}
 
-		if ($is_interval and $dstr =~ /^ (\d\d?) \. (\d+) $/x) {
+		if ($is_interval and $dstr =~ /^ ( [0 1]? \d | 2 [0-3] ) (?: \. (\d+) )? h? $/x) {
+			# catch hours, possibly fractional, with optional h suffix, up to 24
 			$time->{H} = 0+$1;
-			$time->{M} = int($2 * 6 + 0.5); # * 60 / 10
+			$time->{M} = int(($2 // 0) * 6 + 0.5); # * 60 / 10
 			$time->{S} = 0;
 		}
-		elsif ($is_interval and $dstr =~ /^ (\d\d?) \.? (\d*) h $/x) {
-			$time->{H} = 0+$1;
-			$time->{M} = int($2 * 6 + 0.5); # * 60 / 10
-			$time->{S} = 0;
-		}
-		elsif ($is_interval and $dstr =~ /^ (\d+) m $/x) {
+		elsif ($is_interval and $dstr =~ /^ ((?: 2 [4-9] | [3-9] \d | \d{3} ) $ |  (?: \d{1,3} ) (?= m $ ) ) /x) {
+			# catch minutes, either 24-999, or 1-999m
 			my $m = 0+$1;
 			$time->{H} = int($m / 60);
 			$time->{M} = $m % 60;
@@ -1714,6 +1711,7 @@ sub parse_time {
 			}
 		}
 	}
+
 	return $time;
 }
 
