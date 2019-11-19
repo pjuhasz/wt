@@ -1675,7 +1675,7 @@ sub parse_time {
 		if ($is_interval and $dstr =~ /^ ( [0 1]? \d | 2 [0-3] ) (?: \. (\d+) )? h? $/x) {
 			# catch hours, possibly fractional, with optional h suffix, up to 24
 			$time->{H} = 0+$1;
-			$time->{M} = int(($2 // 0) * 6 + 0.5); # * 60 / 10
+			$time->{M} = int(60 * ("0.".($2//0)) + 0.5);
 			$time->{S} = 0;
 		}
 		elsif ($is_interval and $dstr =~ /^ ((?: 2 [4-9] | [3-9] \d | \d{3} ) $ |  (?: \d{1,3} ) (?= m $ ) ) /x) {
