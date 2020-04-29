@@ -1213,7 +1213,7 @@ sub jira_json_to_wtline {
 
 	my $jwlattr = $jira->{worklogAttributes};
 	my $ai = 0;
-	$jwlattr->[$_]{key} eq '_Activity_' and $ai = $_ and last for 0..$#$jwlattr;
+	$jwlattr->[$_]{key}//'' eq '_Activity_' and $ai = $_ and last for 0..$#$jwlattr;
 
 	return {
 		start_time => $start_time,
@@ -1221,7 +1221,7 @@ sub jira_json_to_wtline {
 		date       => $date,
 		project    => $jira->{issue}{key},
 		comment    => $jira->{comment},
-		activity   => $jwlattr->[$ai]{value},
+		activity   => $jwlattr->[$ai]{value} // 'xxx',
 	};
 }
 
