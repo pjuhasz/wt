@@ -825,11 +825,13 @@ sub get_issues {
 	my $summary = 0;
 	my $max = 100;
 	my $raw_jql;
+	my $csv = 0;
 	GetOptions(
 		'assigned!' => \$assigned_to_me,
 		'summary!'  => \$summary,
 		'max=i'     => \$max,
 		'jql=s'     => \$raw_jql,
+		'csv!'      => \$csv,
 	) or help('issues');
 
 	my $filter = shift @ARGV;
@@ -863,19 +865,22 @@ sub get_issues {
 			"fields" => [
 				"summary",
 				"status",
-				"assignee"
+				"assignee",
+				"customfield_11701", # this is the "product" -_-
 			]
 		})
 	);
 
+	my $formatstring = $csv ? "%s,%s,%s,%s,%s" : "%-12s%-16s%-16s%s  %s";
 	if ( $response->is_success() ) {
 		my $raw_data = decode_json $response->decoded_content;
 		say for reverse map { 
-				sprintf "%-12s%-16s%-16s%s", 
+				sprintf $formatstring, 
 					$_->{key}, 
 					_trunc($_->{fields}{status}{name}, 15), 
 					$_->{fields}{assignee}{name} // "-", 
-					$_->{fields}{summary}
+					$_->{fields}{summary},
+					$_->{fields}{customfield_11701}{value} // "-",
 				} 
 			@{$raw_data->{issues}};
 
