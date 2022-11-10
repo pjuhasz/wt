@@ -15,6 +15,7 @@ Available subcommands:
     wt start [-f] [-c] [ISSUE] [COMMENT]
     wt report [-u USER] [RELATIVE-DATESPEC | START [END] [ISSUE]]
     wt rm [-r] INDEX|all
+    wt move INDEX ISSUE [COMMENT]
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
     wt undo
@@ -260,6 +261,19 @@ different: it removes an already committed entry from JIRA.
 
 In this case the INDEX argument is understood as the index of the entry
 in the list of B<remote> entries, as reported by the last C<wt query> command.
+
+=head2 MOVE
+
+    wt move INDEX ISSUE [COMMENT]
+
+This command adjusts a previously committed worklog entry, that is, it "moves"
+the entry to a different issue, and optionally changes the worklog comment.
+
+The INDEX argument is understood as the index of the entry
+in the list of B<remote> entries, as reported by the last C<wt query> command.
+
+The ISSUE argument can be a single dash, meaning that the issue is not changed,
+only the comment (if given).
 
 =head2 LIST
 
@@ -520,6 +534,7 @@ for ($action) {
 	when ([qw/help h/])    { help();       }
 	when ([qw/add a/])     { add();        }
 	when ("rm")            { rm();         }
+	when ([qw/move m/])    { move();       }
 	when (/^[\-\d\+]/)     { unshift @ARGV, $action; add(); }
 	default                { help();       }
 }
@@ -542,6 +557,7 @@ sub help {
 		when ([qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
 		when ([qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
 		when ("rm")            { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/RM"});     }
+		when ([qw/move m/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/MOVE"});   }
 		default                { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
 	}
 
@@ -659,6 +675,53 @@ sub rm {
 		list_local();
 	}
 	return;
+}
+
+sub move {
+	my ($idx, $issue, $comment) = @ARGV;
+	help('move') unless defined $idx and defined $issue;
+
+	die "Error: no remote wt records to delete\n" unless scalar @{$state->{remote}};
+
+	my $pw = get_pw();
+
+	if ($issue eq '-') {
+		$issue = $state->{remote}->[$idx-1]->{issue}->{key};
+	}
+
+	die "Error: index must be 1..".scalar @{$state->{remote}}."\n" unless $idx =~ /^\d+$/ and $idx >= 1 and $idx <= scalar @{$state->{remote}};
+
+	my $saved_entry = dclone $state->{remote}->[$idx-1];
+	_rm_one_remote($idx-1, $pw);
+
+	my $wtline = jira_json_to_wtline($saved_entry);
+
+	$wtline->{project} = $issue;
+	$wtline->{comment} = $comment if defined $comment;
+
+	my $worklog_url = $config->{jira_base_url}.$config->{worklog_url};
+	my $response = connect_to_jira(
+		url     => $worklog_url,
+		content => wtline_to_jira_json($wtline),
+		pw      => $pw,
+	);
+
+	if ( not $response->is_success() ) {
+		_handle_jira_error($response);
+	}
+
+	if (not $ret) {
+		# since only the issue and the comment could change, the timestamps don't,
+		# the entry should be in the same place in the remote list, so instead of
+		# deleting it, we just modify it in place.
+		delete $state->{remote}->[$idx-1]->{deleted};
+		$state->{remote}->[$idx-1]->{issue}->{key} = $issue;
+		$state->{remote}->[$idx-1]->{comment} = $comment if defined $comment;
+	}
+
+	save_state($state_fn, $state);
+	list_remote(on_error => "No remote worklog records.");
+
 }
 
 sub set_mark {
@@ -1361,6 +1424,7 @@ sub sparkline {
 		$daily_sums{$d} += $t;
 	}
 	my ($start, $end);
+	$mode //= '';
 	if ($mode eq 'current') {
 		($start, $end) = _get_month_start_end($wt_arr->[0]->{date});
 	} elsif ($mode eq 'current_week') {
