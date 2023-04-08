@@ -678,7 +678,7 @@ sub rm {
 }
 
 sub move {
-	my ($idx, $issue, $comment) = @ARGV;
+	my ($idx, $issue, @comments) = @ARGV;
 	help('move') unless defined $idx and defined $issue;
 
 	die "Error: no remote wt records to delete\n" unless scalar @{$state->{remote}};
@@ -696,8 +696,10 @@ sub move {
 
 	my $wtline = jira_json_to_wtline($saved_entry);
 
+	my $comment = join ' ', @comments;
+
 	$wtline->{project} = $issue;
-	$wtline->{comment} = $comment if defined $comment;
+	$wtline->{comment} = $comment if length $comment;
 
 	my $worklog_url = $config->{jira_base_url}.$config->{worklog_url};
 	my $response = connect_to_jira(
@@ -716,7 +718,7 @@ sub move {
 		# deleting it, we just modify it in place.
 		delete $state->{remote}->[$idx-1]->{deleted};
 		$state->{remote}->[$idx-1]->{issue}->{key} = $issue;
-		$state->{remote}->[$idx-1]->{comment} = $comment if defined $comment;
+		$state->{remote}->[$idx-1]->{comment} = $comment if length $comment;
 	}
 
 	save_state($state_fn, $state);
