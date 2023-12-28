@@ -466,8 +466,7 @@ Storing the password in plaintext is not supported (nor is it recommended).
 
 use strict;
 use warnings;
-no if ($] >= 5.018), 'warnings' => 'experimental';
-use feature qw/say switch/;
+use feature qw/say/;
 use Pod::Usage;
 use JSON qw/encode_json decode_json/;
 use HTTP::Request;
@@ -483,6 +482,16 @@ use Encode::Locale;
 use Encode;
 use Carp;
 use Storable qw/dclone/;
+
+# when is deprecated in 5.38 :(
+sub match($) {
+	my $rs = shift;
+	if    (not defined $rs)     { return not defined $_ }
+	elsif (not ref $rs)         { return $_ eq $rs }
+	elsif (ref $rs eq 'ARRAY')  { my $ls = $_; return scalar grep { $ls eq $_ } @$rs }
+	elsif (ref $rs eq 'Regexp') { return $_ =~ /$rs/ }
+	else                        { die "Unknown construct in 'smart' match" }
+}
 
 # keyring support is optional, will be enabled only
 # if the module is installed
@@ -524,19 +533,19 @@ if (defined $action and exists $state->{aliases}{$action}) {
 
 # jump table for subcommands
 for ($action) {
-	when (undef)           { list_local(); }
-	when ([qw/issues :/])  { get_issues(); }
-	when ([qw/alias al/ ]) { set_alias();  }
-	when ([qw/start  s/ ]) { set_mark();   }
-	when ([qw/commit ci/]) { commit();     }
-	when ([qw/report r/])  { query();      }
-	when ([qw/undo u/ ])   { undo();       }
-	when ([qw/help h/])    { help();       }
-	when ([qw/add a/])     { add();        }
-	when ("rm")            { rm();         }
-	when ([qw/move m/])    { move();       }
-	when (/^[\-\d\+]/)     { unshift @ARGV, $action; add(); }
-	default                { help();       }
+	if    (match undef)           { list_local(); }
+	elsif (match [qw/issues :/])  { get_issues(); }
+	elsif (match [qw/alias al/ ]) { set_alias();  }
+	elsif (match [qw/start  s/ ]) { set_mark();   }
+	elsif (match [qw/commit ci/]) { commit();     }
+	elsif (match [qw/report r/])  { query();      }
+	elsif (match [qw/undo u/ ])   { undo();       }
+	elsif (match [qw/help h/])    { help();       }
+	elsif (match [qw/add a/])     { add();        }
+	elsif (match "rm")            { rm();         }
+	elsif (match [qw/move m/])    { move();       }
+	elsif (match /^[\-\d\+]/)     { unshift @ARGV, $action; add(); }
+	else                          { help();       }
 }
 
 exit($ret);
@@ -547,18 +556,18 @@ sub help {
 	my $action = shift // shift @ARGV // "";
 
 	for ($action) {
-		when (undef)           { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
-		when ([qw/start s/])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/START"});  }
-		when ([qw/alias al/ ]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ALIAS"});  }
-		when ([qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"}); }
-		when ([qw/issues :/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ISSUES"}); }
-		when ([qw/report r/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}); }
-		when ([qw/undo u/ ])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/UNDO" });  }
-		when ([qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
-		when ([qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
-		when ("rm")            { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/RM"});     }
-		when ([qw/move m/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/MOVE"});   }
-		default                { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
+		if    (match undef)           { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
+		elsif (match [qw/start s/])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/START"});  }
+		elsif (match [qw/alias al/ ]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ALIAS"});  }
+		elsif (match [qw/commit ci/]) { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/COMMIT"}); }
+		elsif (match [qw/issues :/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ISSUES"}); }
+		elsif (match [qw/report r/])  { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/REPORT"}); }
+		elsif (match [qw/undo u/ ])   { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/UNDO" });  }
+		elsif (match [qw/help h/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/HELP"});   }
+		elsif (match [qw/add a/])     { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/ADD"});    }
+		elsif (match "rm")            { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/RM"});     }
+		elsif (match [qw/move m/])    { pod2usage({-verbose => 99, -sections => "SUBCOMMANDS/MOVE"});   }
+		else                          { pod2usage({-verbose => 99, -sections => "NAME|SYNOPSIS"});     }
 	}
 
 	exit;
