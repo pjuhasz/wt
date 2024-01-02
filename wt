@@ -544,7 +544,7 @@ for ($action) {
 	elsif (match [qw/add a/])     { add();        }
 	elsif (match "rm")            { rm();         }
 	elsif (match [qw/move m/])    { move();       }
-	elsif (match /^[\-\d\+]/)     { unshift @ARGV, $action; add(); }
+	elsif (match qr/^[\-\d\+]/)     { unshift @ARGV, $action; add(); }
 	else                          { help();       }
 }
 
