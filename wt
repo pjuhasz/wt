@@ -1175,7 +1175,7 @@ sub _rm_one_remote {
 	my $pw = shift;
 
 	my $id = $state->{remote}[$idx]{id};
-	my $project = 'FIXME';
+	my $project = $state->{remote}[$idx]{issue}{key};
 
 	my $response = connect_to_jira(
 		http_action => 'DELETE',
