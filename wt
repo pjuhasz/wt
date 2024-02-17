@@ -921,11 +921,11 @@ sub get_issues {
 			push @jql, "issue = $filter";
 		}
 		else {
-			push @jql, "project = $filter";
+			push @jql, "project = \"$filter\"";
 		}
 	}
 	if ($assigned_to_me) {
-		push @jql, "assignee = " . $config->{user_name};
+		push @jql, "assignee = \"" . $config->{user_name} .'"';
 	}
 	my $jql = join " and ", @jql;
 	$jql .= " order by createddate desc" if $jql;
@@ -940,21 +940,21 @@ sub get_issues {
 				"summary",
 				"status",
 				"assignee",
-				"customfield_11701", # this is the "product" -_-
+				"customfield_10040", # this is the "product" -_-
 			]
 		})
 	);
 
-	my $formatstring = $csv ? "%s,%s,%s,%s,%s" : "%-12s%-16s%-16s%s  %s";
+	my $formatstring = $csv ? "%s,%s,%s,%s,%s" : "%-12s%-16s%-18s%s  %s";
 	if ( $response->is_success() ) {
 		my $raw_data = decode_json $response->decoded_content;
 		say for reverse map { 
 				sprintf $formatstring, 
 					$_->{key}, 
 					_trunc($_->{fields}{status}{name}, 15), 
-					$_->{fields}{assignee}{name} // "-", 
+					$_->{fields}{assignee}{displayName} // "-", 
 					$_->{fields}{summary},
-					$_->{fields}{customfield_11701}{value} // "-",
+					$_->{fields}{customfield_10040}{value} // "-",
 				} 
 			@{$raw_data->{issues}};
 
