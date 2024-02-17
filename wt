@@ -10,7 +10,7 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-f] INTERVAL ISSUE COMMENT
     wt commit
     wt start [-f] [-c] [ISSUE] [COMMENT]
     wt report [-u USER] [RELATIVE-DATESPEC | START [END] [ISSUE]]
@@ -36,7 +36,7 @@ descriptions, can be queried.
 
 =head2 ADD
 
-    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-f] INTERVAL ISSUE COMMENT
 
 Adds an entry to the local list of wt entries.
 
@@ -94,12 +94,6 @@ comment saved with C<wt start>), if one is available.
 
 =over
 
-=item C<-a> Activity type
-
-JIRA requires an activity type for each worklog entry. This can be
-overridden with the C<-a> or C<--activity> switch.
-The default activity type is "Dev".
-
 =item C<-d> Set date
 
 By default, the date for the entry is the current date. This can be overridden
@@ -136,8 +130,6 @@ wt.conf. If that key doesn't exist, or the value is empty,
 lunch breaks will not be committed, they will be silently dropped instead.
 
 =item The comment becomes optional, if omitted, "lunch" will be substituted.
-
-=item The activity type will be set to "Break" unless explicitly overridden.
 
 =back
 
@@ -1020,7 +1012,6 @@ sub add {
 	# defaults
 	my $autocommit = 0;
 	my $no_overlap_check = 0;
-	my $activity = undef;
 
 	# need to check if first arg is interval spec (single dash or dash-number)
 	# before calling GetOptions
@@ -1030,7 +1021,6 @@ sub add {
 			'date=s'     => sub { $date = parse_date($_[1]); },
 			'yesterday!' => sub { $date = _yesterday(); },
 			'commit!'    => \$autocommit,
-			'activity=s' => \$activity,
 			'force!'     => \$no_overlap_check,
 		);
 		help('add') if @ARGV and $ARGV[0] =~ /-[^0-9]/;
@@ -1114,11 +1104,6 @@ sub add {
 	$comment = $state->{current_comment} if $comment eq '-' and defined $state->{current_comment};
 	# and save current comment for future use... in the end, when we can change state safely
 
-	# activity may have been set by option
-	# special hack: no comment is required for lunch
-	$activity = "Break" if not defined $activity and $project_is_lunch;
-	$activity //= 'Dev';
-
 	# assemble ojject and save it
 	my $wtline = {
 		start_time => $start_time,
@@ -1126,7 +1111,6 @@ sub add {
 		date       => $date,
 		project    => $project,
 		comment    => $comment,
-		activity   => $activity,
 		no_commit  => $no_commit,
 	};
 
