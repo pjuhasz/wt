@@ -820,81 +820,119 @@ sub query {
 
 	my ($start_date_str, $end_date_str, $project) = @ARGV;
 
-	if (defined $start_date_str) {
-		my ($start_date, $end_date, $report_month_mode);
-
-		if ($start_date_str eq 'month') {
-			$report_month_mode = 'current';
-			if (defined $end_date_str) {
-				if ($end_date_str ne 'last') {
-					$end_date_str .= '-1'; # kludge to add fake day part to YYYY-MM input to be able to use parse_date
-				}
-				$report_month_mode = 'historic';
-			}
-			($start_date, $end_date) = _get_month_start_end($end_date_str);
-		}
-		elsif ($start_date_str eq 'week') {
-			$report_month_mode = 'current_week';
-			if (defined $end_date_str) {
-				$report_month_mode = 'historic';
-			}
-			($start_date, $end_date) = _get_week_start_end($end_date_str);
-		}
-		elsif ($start_date_str eq 'yesterday') {
-			if (defined $end_date_str and not defined $project) {
-				$project = $end_date_str;
-			}
-			$end_date = $start_date = _yesterday();
-			$report_month_mode = 'custom_interval';
-		}
-		else {
-			$start_date_str = undef if $start_date_str eq 'today';
-			$start_date = parse_date($start_date_str);
-			help('report') unless defined $start_date;
-
-			$end_date = parse_date($end_date_str);
-			$report_month_mode = 'custom_interval';
-		}
-
-		my %query_hash = (dateFrom => _print_date($start_date), dateTo => _print_date($end_date));
-		$query_hash{projectKey} = $project if defined $project;
-		if (defined $target_user) {
-			# XXX :( for some reason querying $target_user doesn't work directly, I have to query for all team members then filter
-			$query_hash{teamId} = $config->{teamId} // 7; # XXX hardcoded id :(
-		} else {
-			$query_hash{username} = $config->{user_name};
-		}
-		my $query_string = uri_escape_hash(%query_hash);
-
-		my $response = connect_to_jira(
-			http_action => 'GET',
-			url         => $config->{jira_base_url}.$config->{worklog_url}."?".$query_string,
-		);
-
-		if ( $response->is_success() ) {
-			$state->{remote} = decode_json $response->decoded_content;
-
-			update_saved_issue_summaries($state->{remote}, from => 'remote');
-
-			$state->{cached_query_month_mode} = $report_month_mode;
-			list_remote(
-				on_error     => "No worklog records in the specified date range.",
-				report_month => $report_month_mode,
-				start_date   => $start_date,
-				end_date     => $end_date,
-				filter_user  => $target_user);
-
-			save_state($state_fn, $state);
-		}
-		else {
-			_handle_jira_error($response);
-		}
-
-	}
-	else {
+	if (not defined $start_date_str)  {
 		# print last saved query, don't actually ask jira
 		list_remote(on_error => "There is no saved query.", report_month => 'cached');
+		return;
 	} 
+
+	my ($start_date, $end_date, $report_month_mode);
+
+	if ($start_date_str eq 'month') {
+		$report_month_mode = 'current';
+		if (defined $end_date_str) {
+			if ($end_date_str ne 'last') {
+				$end_date_str .= '-1'; # kludge to add fake day part to YYYY-MM input to be able to use parse_date
+			}
+			$report_month_mode = 'historic';
+		}
+		($start_date, $end_date) = _get_month_start_end($end_date_str);
+	}
+	elsif ($start_date_str eq 'week') {
+		$report_month_mode = 'current_week';
+		if (defined $end_date_str) {
+			$report_month_mode = 'historic';
+		}
+		($start_date, $end_date) = _get_week_start_end($end_date_str);
+	}
+	elsif ($start_date_str eq 'yesterday') {
+		if (defined $end_date_str and not defined $project) {
+			$project = $end_date_str;
+		}
+		$end_date = $start_date = _yesterday();
+		$report_month_mode = 'custom_interval';
+	}
+	else {
+		$start_date_str = undef if $start_date_str eq 'today';
+		$start_date = parse_date($start_date_str);
+		help('report') unless defined $start_date;
+
+		$end_date = parse_date($end_date_str);
+		$report_month_mode = 'custom_interval';
+	}
+
+	my @search_issues_jql = (
+		'worklogDate >= '.Q(_print_date($start_date)),
+		'worklogDate <= '.Q(_print_date($end_date)),
+	);
+
+	push @search_issues_jql, 'project = '.Q($project) if defined $project;
+
+	if (not defined $target_user) {
+		$target_user = $config->{user_name};
+	}
+	push @search_issues_jql, 'worklogAuthor = '.Q($target_user);
+
+	my $search_issues_jql = join ' AND ', @search_issues_jql;
+
+	my $search_issues_content = {
+		jql => $search_issues_jql,
+		fields => [ 'issuekey', 'summary' ],
+		startAt => 0,
+		maxResults => 1000000,
+	};
+	my $search_issues_json = encode_json $search_issues_content;
+
+	my $search_issues_response = connect_to_jira(
+		url     => $config->{jira_base_url}.$config->{search_url},
+		content => $search_issues_json,
+	);
+
+	if ( not $search_issues_response->is_success() ) {
+		_handle_jira_error($search_issues_response);
+		return;
+	}
+
+	my $issues = decode_json $search_issues_response->decoded_content;
+
+	my $start_tfe = _wt2tfe({H=>0,M=>0,S=>0},$start_date)  * 1000;
+	my $end_tfe   = _wt2tfe({H=>23,M=>59,S=>59},$end_date) * 1000 + 999;
+
+	my @filtered_worklogs;
+	for my $issue (map {$_->{key}} @{$issues->{issues}}) {
+		my $issue_worklog_response = connect_to_jira(
+			http_action => 'GET',
+			url         => $config->{jira_base_url}.$config->{worklog_url}.'/'.$issue.'/worklog' .
+				'?maxResults=100000&startedAfter='.$start_tfe.'&startedBefore='.$end_tfe,
+		);
+		if ( not $issue_worklog_response->is_success() ) {
+			_handle_jira_error($issue_worklog_response);
+			return;
+		}
+
+		my $tmp = decode_json $issue_worklog_response->decoded_content;
+		for my $worklog (@{$tmp->{worklogs}}) {
+			if ($worklog->{author}->{emailAddress} eq $target_user) {
+				$worklog->{issue}{key} = $issue;
+				push @filtered_worklogs, $worklog;
+			}
+		}
+	}
+	@filtered_worklogs = sort {$a->{started} cmp $b->{started}} @filtered_worklogs;
+	$state->{remote} = \@filtered_worklogs;
+
+	update_saved_issue_summaries($issues->{issues});
+
+	$state->{cached_query_month_mode} = $report_month_mode;
+	list_remote(
+		on_error     => "No worklog records in the specified date range.",
+		report_month => $report_month_mode,
+		start_date   => $start_date,
+		end_date     => $end_date,
+		filter_user  => $target_user);
+
+	save_state($state_fn, $state);
+
 	return;
 
 }
@@ -963,7 +1001,7 @@ sub get_issues {
 				} 
 			@{$raw_data->{issues}};
 
-		update_saved_issue_summaries($raw_data->{issues}, from => 'issuelist');
+		update_saved_issue_summaries($raw_data->{issues});
 		save_state($state_fn, $state);
 	}
 	else {
@@ -1137,10 +1175,11 @@ sub _rm_one_remote {
 	my $pw = shift;
 
 	my $id = $state->{remote}[$idx]{id};
+	my $project = 'FIXME';
 
 	my $response = connect_to_jira(
 		http_action => 'DELETE',
-		url     => $config->{jira_base_url}.$config->{worklog_url}.$id.'/',
+		url     => $config->{jira_base_url}.$config->{worklog_url}.'/'. $project . '/worklog/' . $id,
 		pw      => $pw,
 	);
 
@@ -1215,7 +1254,7 @@ sub load_config {
 	die "Can't load config file $_[0]\n" unless $config;
 	die "Missing key from config file: jira_base_url\n" unless defined $config->{jira_base_url};
 	die "Missing key from config file: user_name\n" unless defined $config->{user_name};
-	$config->{worklog_url} //= "/rest/tempo-timesheets/3/worklogs/";
+	$config->{worklog_url} //= "/rest/api/2/issue";
 	$config->{search_url}  //= "/rest/api/2/search";
 	$config->{lunch_project} //= '';
 
@@ -1291,14 +1330,10 @@ sub wtline_to_jira_json {
 sub jira_json_to_wtline {
 	my $jira = shift;
 	
-	my ($ds, $ts) = split 'T', $jira->{dateStarted};
+	my ($ds, $ts) = split 'T', $jira->{started};
 	my $date = parse_date($ds);
 	my $start_time = parse_time($ts);
 	my $end_time = increment_time($start_time, $jira->{timeSpentSeconds});
-
-	my $jwlattr = $jira->{worklogAttributes};
-	my $ai = 0;
-	$jwlattr->[$_]{key}//'' eq '_Activity_' and $ai = $_ and last for 0..$#$jwlattr;
 
 	return {
 		start_time => $start_time,
@@ -1306,7 +1341,6 @@ sub jira_json_to_wtline {
 		date       => $date,
 		project    => $jira->{issue}{key},
 		comment    => $jira->{comment},
-		activity   => $jwlattr->[$ai]{value} // 'xxx',
 	};
 }
 
@@ -1321,7 +1355,6 @@ sub print_wtline {
 		_print_time($wt->{end_time}),
 		$wt->{project},
 		$wt->{comment},
-		$wt->{activity},
 		"\n";
 }
 
@@ -1336,19 +1369,9 @@ sub uri_escape_hash {
 
 sub update_saved_issue_summaries {
 	my $issuelist = shift;
-	my %args = @_;
 
-	my %actions = (
-		remote => sub {
-				$state->{issues}->{ $_->{issue}{key} } = $_->{issue}{summary} for @_;
-			},
-		issuelist => sub {
-				$state->{issues}->{ $_->{key} } = $_->{fields}{summary} for @_;
-			}
-	);
-	if (defined $args{from} and exists $actions{ $args{from} }) {
-		$actions{ $args{from} }->(@$issuelist);
-	}
+	$state->{issues}->{ $_->{key} } = $_->{fields}{summary} for @$issuelist;
+
 	return;
 }
 
@@ -1475,7 +1498,7 @@ sub list_remote {
 	my %args = @_;
 	my $i = 1;
 	my @remote = @{$state->{remote}};
-	@remote = grep { $_->{author}->{name} eq $args{filter_user} } @remote if defined $args{filter_user};
+	@remote = grep { $_->{author}->{emailAddress} eq $args{filter_user} } @remote if defined $args{filter_user};
 	for my $csira (@remote) {
 		print print_wtline(jira_json_to_wtline($csira), $i++);
 	}
@@ -1809,6 +1832,10 @@ sub _trunc {
 
 sub pad {
 	return ($_[0] < 10) ? '0'.$_[0] : $_[0];
+}
+
+sub Q {
+	return '"'.$_[0].'"';
 }
 
 # don't your own time formatting, they said
