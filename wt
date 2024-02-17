@@ -710,10 +710,12 @@ sub move {
 	$wtline->{project} = $issue;
 	$wtline->{comment} = $comment if length $comment;
 
-	my $worklog_url = $config->{jira_base_url}.$config->{worklog_url};
+	my ($json, $project) = wtline_to_jira_json($wtline);
+
+	my $worklog_url = $config->{jira_base_url}.$config->{worklog_url}.'/'.$project.'/worklog';
 	my $response = connect_to_jira(
 		url     => $worklog_url,
-		content => wtline_to_jira_json($wtline),
+		content => $json,
 		pw      => $pw,
 	);
 
@@ -779,13 +781,16 @@ sub set_mark {
 
 sub commit {
 	my $pw = get_pw();
-	my $worklog_url = $config->{jira_base_url}.$config->{worklog_url};
 
 	for my $wtline (@{$state->{local}}) {
 		if (not $wtline->{no_commit}) {
+			my ($json, $project) = wtline_to_jira_json($wtline);
+
+			my $worklog_url = $config->{jira_base_url}.$config->{worklog_url}.'/'.$project.'/worklog';
+
 			my $response = connect_to_jira(
 				url     => $worklog_url,
-				content => wtline_to_jira_json($wtline),
+				content => $json,
 				pw      => $pw,
 			);
 
@@ -1260,26 +1265,27 @@ sub wtline_to_jira_json {
 	my $date_started = format_date($wtline->{date}, $wtline->{start_time});
 	
 	my $ojject = {
-		issue => {
-			key => uc $wtline->{project},
-		},
+		#issue => {
+		#	key => uc $wtline->{project},
+		#},
 		comment => $wtline->{comment},
-		dateStarted => $date_started, #YYYY-MM-ddT00:00:00.000+0000
+		started => $date_started, #YYYY-MM-ddT00:00:00.000+0000
 		timeSpentSeconds => $time_spent, #seconds
 		billedSeconds => 0,
-		worklogAttributes => [
-			 {
-			   'value' => $wtline->{activity},
-			   'key' => '_Activity_'
-			 }
-        ],
-		author => { 
-			name => $config->{user_name} 
-		},
+		#worklogAttributes => [
+		#	 {
+		#	   'value' => $wtline->{activity},
+		#	   'key' => '_Activity_'
+		#	 }
+        #],
+		#author => { 
+		#	name => $config->{user_name} 
+		#},
 	};
 
 	my $json = encode_json($ojject);
-	return $json;
+	my $project = uc $wtline->{project};
+	return ($json, $project);
 }
 
 sub jira_json_to_wtline {
@@ -1805,14 +1811,16 @@ sub pad {
 	return ($_[0] < 10) ? '0'.$_[0] : $_[0];
 }
 
+# don't your own time formatting, they said
 sub format_date {
 	my ($date, $time) = @_;
 
-	my @lt = localtime(time);
+	my @lt = localtime(_wt2tfe($time, $date));
 	my $res = _print_date($date)
 			. 'T'
-			. _print_time($time);
-			#. ($lt[8] ? '+2000' : '+1000');
+			. _print_time($time)
+			. '.000'
+			. ($lt[8] ? '+0200' : '+0100');
 	return $res;
 }
 
