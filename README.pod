@@ -8,11 +8,12 @@ wt - command line work log client
 
 Available subcommands:
 
-    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-f] INTERVAL ISSUE COMMENT
     wt commit
     wt start [-f] [-c] [ISSUE] [COMMENT]
     wt report [-u USER] [RELATIVE-DATESPEC | START [END] [ISSUE]]
     wt rm [-r] INDEX|all
+    wt move INDEX ISSUE [COMMENT]
     wt issues [-a] [-s|-j] [-m NUM] STRING
     wt alias [ALIAS [COMMAND ...]]
     wt undo
@@ -33,7 +34,7 @@ descriptions, can be queried.
 
 =head2 ADD
 
-    wt [add] [-d DATE|-y] [-c] [-f] [-a ACTIVITY] INTERVAL ISSUE COMMENT
+    wt [add] [-d DATE|-y] [-c] [-f] INTERVAL ISSUE COMMENT
 
 Adds an entry to the local list of wt entries.
 
@@ -91,12 +92,6 @@ comment saved with C<wt start>), if one is available.
 
 =over
 
-=item C<-a> Activity type
-
-JIRA requires an activity type for each worklog entry. This can be
-overridden with the C<-a> or C<--activity> switch.
-The default activity type is "Dev".
-
 =item C<-d> Set date
 
 By default, the date for the entry is the current date. This can be overridden
@@ -133,8 +128,6 @@ wt.conf. If that key doesn't exist, or the value is empty,
 lunch breaks will not be committed, they will be silently dropped instead.
 
 =item The comment becomes optional, if omitted, "lunch" will be substituted.
-
-=item The activity type will be set to "Break" unless explicitly overridden.
 
 =back
 
@@ -258,6 +251,19 @@ different: it removes an already committed entry from JIRA.
 
 In this case the INDEX argument is understood as the index of the entry
 in the list of B<remote> entries, as reported by the last C<wt query> command.
+
+=head2 MOVE
+
+    wt move INDEX ISSUE [COMMENT]
+
+This command adjusts a previously committed worklog entry, that is, it "moves"
+the entry to a different issue, and optionally changes the worklog comment.
+
+The INDEX argument is understood as the index of the entry
+in the list of B<remote> entries, as reported by the last C<wt query> command.
+
+The ISSUE argument can be a single dash, meaning that the issue is not changed,
+only the comment (if given).
 
 =head2 LIST
 
