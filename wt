@@ -437,6 +437,17 @@ of the program, is modified by most subcommands (the exceptions are C<wt>
 without arguments and C<wt report> without arguments). It is also a JSON
 file, however, it is not intended to be directly edited by the user.
 
+=head1 ENVIRONMENT
+
+=over
+
+=item WT_JIRA_APIKEY
+
+With JIRA instances that use API keys for basic authentication-based API access,
+you can store your API key in this variable.
+
+=back
+
 =head1 SAVING JIRA PASSWORD
 
 The C<commit>, C<issues>, C<rm --remote> and C<report> subcommand have to connect to 
@@ -449,10 +460,13 @@ implementation supported by the Passwd::Keyring::Auto module, which must
 also be installed if keyring support is desired), the password is asked only once, then saved into the
 keyring safely.
 
-On systems without keyring support the JIRA password is asked before every
-command that needs JIRA access.
+Alternatively, with JIRA instances that use API keys for basic authentication-based API access,
+you can store your API key in the WT_JIRA_APIKEY environment variable.
 
-Storing the password in plaintext is not supported (nor is it recommended).
+On systems without keyring support, if WT_JIRA_APIKEY is not set,
+the JIRA password is asked before every command that needs JIRA access.
+
+Storing the password in plaintext in the config file is not supported (nor is it recommended).
 
 =cut
 
@@ -1886,8 +1900,9 @@ sub get_pw {
 			$pw = read_pw_from_console();
 			$keyring->set_password($username, $pw, "wt_client");
 		}
-	}
-	else {
+	} elsif (defined $ENV{WT_JIRA_APIKEY}) {
+		$pw = $ENV{WT_JIRA_APIKEY};
+	} else {
 		$pw = read_pw_from_console();
 	}
 	return $pw;
