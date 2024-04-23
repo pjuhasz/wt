@@ -883,7 +883,7 @@ sub query {
 
 	my $search_issues_content = {
 		jql => $search_issues_jql,
-		fields => [ 'issuekey', 'summary' ],
+		fields => [ 'issuekey', 'summary', "customfield_10040" ],
 		startAt => 0,
 		maxResults => 1000000,
 	};
@@ -1369,6 +1369,7 @@ sub update_saved_issue_summaries {
 	my $issuelist = shift;
 
 	$state->{issues}->{ $_->{key} } = $_->{fields}{summary} for @$issuelist;
+	$state->{issue_products}->{ $_->{key} } = $_->{fields}{customfield_10040}{value} for @$issuelist;
 
 	return;
 }
@@ -1385,7 +1386,9 @@ sub summary {
 	}
 
 	my $summary_lines = join "", map {
-			sprintf("% 6.2f\t%s\t%s\n", ($times{$_}/3600), $_, (exists $state->{issues}{$_} ? $state->{issues}{$_} : ""))
+			sprintf("% 6.2f\t%s\t%s\t%s\n", ($times{$_}/3600), $_, 
+				(exists $state->{issues}{$_} ? $state->{issues}{$_} : "?"),
+				(exists $state->{issue_products}{$_} && defined $state->{issue_products}{$_} ? '['.$state->{issue_products}{$_}.']' : '[]'))
 		} 
 		sort { 
 			$times{$b} <=> $times{$a} 
