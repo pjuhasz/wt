@@ -884,8 +884,8 @@ sub query {
 	my $search_issues_content = {
 		jql => $search_issues_jql,
 		fields => [ 'issuekey', 'summary', "customfield_10040" ],
-		startAt => 0,
-		maxResults => 1000000,
+		#startAt => 0,
+		maxResults => 5000,
 	};
 	my $search_issues_json = encode_json $search_issues_content;
 
@@ -953,7 +953,7 @@ sub get_issues {
 		'assigned!' => \$assigned_to_me,
 		'summary!'  => \$summary,
 		'max=i'     => \$max,
-		'jql=s'     => \$raw_jql,
+		'jql!'     => \$raw_jql,
 		'csv!'      => \$csv,
 	) or help('issues');
 
@@ -983,7 +983,7 @@ sub get_issues {
 		url     => $config->{jira_base_url}.$config->{search_url},
 		content => encode_json({
 			"jql" => $jql,
-			"startAt" => 0,
+			#"startAt" => 0,
 			"maxResults" => $max,
 			"fields" => [
 				"summary",
@@ -1253,7 +1253,7 @@ sub load_config {
 	die "Missing key from config file: jira_base_url\n" unless defined $config->{jira_base_url};
 	die "Missing key from config file: user_name\n" unless defined $config->{user_name};
 	$config->{worklog_url} //= "/rest/api/2/issue";
-	$config->{search_url}  //= "/rest/api/2/search";
+	$config->{search_url}  //= "/rest/api/3/search/jql";
 	$config->{lunch_project} //= '';
 
 	return $config;
